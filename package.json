@@ -1,14 +1,21 @@
 {
-  "name": "Backend",
-  "version": "0.2.0",
-  "private": true,
+  "name": "server",
+  "version": "1.0.0",
+  "main": "index.js",
+  "license": "MIT",
   "scripts": {
-    "start": "node server.js"
+    "start": "nodemon app.js"
   },
   "dependencies": {
-    "underscore": "1.5.x",
-    "express": "3.3.x",
-    "jade": "0.33.x",
-    "socket.io": "0.9.x"
+    "config": "^3.3.6",
+    "express": "^4.17.2",
+    "js-chess-engine": "^1.0.2",
+    "mongodb": "^4.2.2",
+    "mongoose": "^6.1.3",
+    "path": "^0.12.7",
+    "socket.io": "^2.3.0"
+  },
+  "devDependencies": {
+    "nodemon": "^2.0.4"
   }
 }
