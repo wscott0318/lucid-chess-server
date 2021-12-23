@@ -10,26 +10,30 @@ var mongoose = require("mongoose");
 var games = {};
 var users = 0;
 var app = express();
-// configure database
-require("./config/database")(app, mongoose);
 
 app.use(express.static(path.join(__dirname, "public")));
+const routes = require("./routes/token");
+app.use(routes);
 app.set("port", 8000);
 http.createServer(app).listen(app.get("port"), function () {
   console.log("server is listening on port 8000");
 });
+
+// configure database
+require("./config/database")(app, mongoose);
 
 // Bootstrap models
 fs.readdirSync(__dirname + "/models").forEach(function (file) {
   if (~file.indexOf(".js")) require(__dirname + "/models/" + file);
 });
 
-io.on("connect", function (socket) {
+io.sockets.on("connection", function (socket) {
   console.log("socket is connected");
   var username = socket.handshake.query.user;
   users++;
 
   socket.on("join", function (data) {
+    console.log("join");
     if (!data.token) return;
     var room = data.token;
 
@@ -76,29 +80,30 @@ io.on("connect", function (socket) {
   });
 
   socket.on("test", function (data) {
-    console.log(data);
-    socket.emit("test", data);
+    io.sockets.emit("test", data);
+    // socket.broadcast.emit("test", data);
   });
 
   socket.on("move", function (data) {
-    if (!data.token) return;
+    if (!data.token || !games[data.token]) return;
+    console.log("move");
     games[data.token].jce.move(data.from, data.to);
     socket.broadcast.to(data.token).emit("move", data);
   });
 
-  socket.on("ai-move", function (data) {
-    if (!data.token) return;
-    var res = games[data.token].jce.aiMove(data.level);
-    socket
-      .to(data.token)
-      .emit("move", { from: Object.keys(res)[0], to: Object.values(res)[0] });
-  });
+  // socket.on("ai-move", function (data) {
+  //   if (!data.token) return;
+  //   var res = games[data.token].jce.aiMove(data.level);
+  //   socket
+  //     .to(data.token)
+  //     .emit("move", { from: Object.keys(res)[0], to: Object.values(res)[0] });
+  // });
 
-  socket.on("moves", function (data) {
-    if (!data.token) return;
-    var res = games[data.token].jce.moves(data.from);
-    socket.to(data.token).emit("moves", { from: data.from, res: res });
-  });
+  // socket.on("moves", function (data) {
+  //   if (!data.token) return;
+  //   var res = games[data.token].jce.moves(data.from);
+  //   socket.to(data.token).emit("moves", { from: data.from, res: res });
+  // });
 
   socket.on("set-piece", function (data) {
     if (!data.token) return;
