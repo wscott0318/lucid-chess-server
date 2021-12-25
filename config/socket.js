@@ -16,9 +16,9 @@ module.exports = function (server) {
         socket.emit( packet.socketEvents['SC_RoomCreated'], { roomId: roomId } );
     }
 
-    const  handleJoinRoom = (params, socket) => {
+    const handleJoinRoom = (params, socket) => {
         const roomIndex = getRoomIndexFromId( params.roomId );
-        if( roomIndex === -1 || rooms[roomIndex].players.length === 0 ) {    // when room doesn't exist, create the match matching room
+        if( roomIndex === -1 || rooms[roomIndex].players.length === 0 || !rooms[roomIndex].friendMatch ) {    // when room doesn't exist, create the match matching room
             createNewRoom( false, socket, params.username );
         } else if( rooms[roomIndex].players.length > 1 ) {  // already more than 2 players on the room
             socket.emit( packet.socketEvents['SC_ForceExit'], { message: 'Another player already joined.' } );
@@ -52,12 +52,9 @@ module.exports = function (server) {
 
     const handleSelectPiece = ( params, socket ) => {
         const roomIndex = getRoomIndexFromId( socket.roomId );
-        const currentTurn = rooms[roomIndex].matchStatus.game.board.configuration.turn;
-        const currentPlayer = rooms[roomIndex].matchStatus[ currentTurn ];
 
-        if( socket.id !== currentPlayer ) { // only accept the turn player message
+        if( !isRightPlayer(roomIndex, socket) )  // illegal player sent message
             return;
-        }
 
         const { fen } = params;
         const possibleMoves = rooms[roomIndex].matchStatus.game.moves(fen);
@@ -68,6 +65,10 @@ module.exports = function (server) {
     const handlePerformMove = ( params, socket ) => {
         const { from, to } = params;
         const roomIndex = getRoomIndexFromId( socket.roomId );
+
+        if( !isRightPlayer(roomIndex, socket) )  // illegal player sent message
+            return;
+        console.log('performMove: ', socket.id);
 
         const game = rooms[roomIndex].matchStatus.game;
 
@@ -112,6 +113,10 @@ module.exports = function (server) {
 
     const handlePawnTransform = ( params, socket ) => {
         const roomIndex = getRoomIndexFromId( socket.roomId );
+
+        if( !isRightPlayer(roomIndex, socket) )  // illegal player sent message
+            return;
+
         const { from, to, pieceType } = params;
 
         rooms[roomIndex].matchStatus.game.move( from, to );
@@ -126,7 +131,7 @@ module.exports = function (server) {
         const currentTurn = rooms[roomIndex].matchStatus.game.board.configuration.turn;
         const currentPlayer = rooms[roomIndex].matchStatus[ currentTurn ];
 
-        const isFinished = rooms[roomIndex].matchStatus.game.board.configuration.isFinished;
+        const isFinished = checkIfFinished(rooms[roomIndex].matchStatus.game);
         if( isFinished )
             rooms[roomIndex].status = packet.roomStatus['finished'];
 
@@ -154,6 +159,11 @@ module.exports = function (server) {
     }
 
     const handleUnSelectPiece = ( params, socket ) => {
+        const roomIndex = getRoomIndexFromId( socket.roomId );
+
+        if( !isRightPlayer(roomIndex, socket) )  // illegal player sent message
+            return;
+
         io.sockets.to(socket.roomId).emit( packet.socketEvents['SC_UnSelectPiece'] );
     }
 
@@ -167,8 +177,10 @@ module.exports = function (server) {
     
                 if( rooms[roomIndex].players.length > 0 ) { // only one player disconnect
                     io.sockets.to(socket.roomId).emit( packet.socketEvents['SC_PlayerLogOut'], { username: socket.username } );
-                    if( rooms[roomIndex] )
+                    if( rooms[roomIndex] ) {
                         rooms[roomIndex].status = packet.roomStatus['waiting'];
+                        rooms[roomIndex].friendMatch = false;
+                    }
                 } else {    // no player in the room
                     rooms.splice(roomIndex, 1);
                 }
@@ -226,5 +238,25 @@ module.exports = function (server) {
         socket.roomId = roomId;
 
         return roomId;
+    }
+
+    const isRightPlayer = ( roomIndex, socket ) => {
+        const currentTurn = rooms[roomIndex].matchStatus.game.board.configuration.turn;
+        const currentPlayer = rooms[roomIndex].matchStatus[ currentTurn ];
+
+        if( socket.id !== currentPlayer ) { // only accept the turn player message
+            return false;
+        }
+        return true;
+    }
+
+    const checkIfFinished = (game) => {
+        const moves = game.moves();
+        let totalCount = 0;
+        for( const i in moves ) {
+            totalCount += moves[i].length;
+        }
+
+        return totalCount === 0 || game.board.configuration.isFinished;
     }
 };
