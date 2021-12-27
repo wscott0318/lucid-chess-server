@@ -167,6 +167,40 @@ module.exports = function (server) {
         io.sockets.to(socket.roomId).emit( packet.socketEvents['SC_UnSelectPiece'] );
     }
 
+    const handleMatchPlayLogin = ( params, socket ) => {
+        const roomIndex = rooms.findIndex((item) => item.friendMatch === false && item.status === packet.roomStatus['waiting'] && item.players.length === 1 );
+        if( roomIndex === -1 ) {
+            createNewRoom( false, socket, params.username );
+        } else {
+            // Join existing room
+            rooms[roomIndex].players.push({
+                socketId: socket.id,
+                username: params.username
+            });
+
+            socket.username = params.username;
+            socket.roomId = rooms[roomIndex].id;
+            socket.join( rooms[roomIndex].id );
+
+            // inital room process;
+            const whiteIndex = helper.getRandomVal(2);
+            const blackIndex = whiteIndex === 0 ? 1 : 0;
+
+            rooms[roomIndex].matchStatus = {
+                game: new jsChessEngine.Game(),
+                white: rooms[roomIndex].players[ whiteIndex ].socketId,
+                black: rooms[roomIndex].players[ blackIndex ].socketId,
+            }
+            rooms[roomIndex].status = packet.roomStatus['inProgress'];
+
+            io.sockets.to( rooms[roomIndex].id ).emit( packet.socketEvents['SC_GameStarted'], { white: rooms[roomIndex].matchStatus.white, black: rooms[roomIndex].matchStatus.black } );
+
+            const currentTurn = rooms[roomIndex].matchStatus.game.board.configuration.turn;
+            const currentPlayer = rooms[roomIndex].matchStatus[ currentTurn ];
+            io.sockets.to( rooms[roomIndex].id ).emit( packet.socketEvents['SC_ChangeTurn'], { currentTurn, currentPlayer } );
+        }
+    }
+
     const handleDisconnect = (socket) => {
         if( socket.roomId ) {
             const roomIndex = getRoomIndexFromId( socket.roomId );
@@ -198,6 +232,7 @@ module.exports = function (server) {
         socket.on(packet.socketEvents['CS_PerformMove'], (params) => handlePerformMove( params, socket ));
         socket.on(packet.socketEvents['CS_PawnTransform'], (params) => handlePawnTransform( params, socket ));
         socket.on(packet.socketEvents['CS_UnSelectPiece'], (params) => handleUnSelectPiece( params, socket ));
+        socket.on(packet.socketEvents['CS_MatchPlayLogin'], (params) => handleMatchPlayLogin( params, socket ));
         socket.on('disconnect', () => handleDisconnect(socket));
     });
 
