@@ -10,6 +10,10 @@ module.exports = function (server) {
     const rooms = [];
     const users = [];
 
+    // setInterval(() => {
+    //     console.log(rooms);
+    // }, 1000);
+
     const handleCreateRoom = (params, socket) => {
         const roomId = createNewRoom( params.friendMatch, socket, params.username );
 
@@ -19,7 +23,8 @@ module.exports = function (server) {
     const handleJoinRoom = (params, socket) => {
         const roomIndex = getRoomIndexFromId( params.roomId );
         if( roomIndex === -1 || rooms[roomIndex].players.length === 0 || !rooms[roomIndex].friendMatch ) {    // when room doesn't exist, create the match matching room
-            createNewRoom( false, socket, params.username );
+            // createNewRoom( false, socket, params.username );
+            socket.emit( packet.socketEvents['SC_ForceExit'], { message: 'Friend Match Room does not exist.' } );
         } else if( rooms[roomIndex].players.length > 1 ) {  // already more than 2 players on the room
             socket.emit( packet.socketEvents['SC_ForceExit'], { message: 'Another player already joined.' } );
         } else {
@@ -68,7 +73,6 @@ module.exports = function (server) {
 
         if( !isRightPlayer(roomIndex, socket) )  // illegal player sent message
             return;
-        console.log('performMove: ', socket.id);
 
         const game = rooms[roomIndex].matchStatus.game;
 
@@ -205,19 +209,8 @@ module.exports = function (server) {
         if( socket.roomId ) {
             const roomIndex = getRoomIndexFromId( socket.roomId );
             if( roomIndex !== -1 && rooms[roomIndex] ) {
-                const playerIndex = rooms[roomIndex].players.findIndex((item) => item.socketId === socket.id);
-
-                rooms[roomIndex].players.splice(playerIndex, 1);
-    
-                if( rooms[roomIndex].players.length > 0 ) { // only one player disconnect
-                    io.sockets.to(socket.roomId).emit( packet.socketEvents['SC_PlayerLogOut'], { username: socket.username } );
-                    if( rooms[roomIndex] ) {
-                        rooms[roomIndex].status = packet.roomStatus['waiting'];
-                        rooms[roomIndex].friendMatch = false;
-                    }
-                } else {    // no player in the room
-                    rooms.splice(roomIndex, 1);
-                }
+                io.sockets.to(socket.roomId).emit( packet.socketEvents['SC_PlayerLogOut'], { username: socket.username } );
+                rooms.splice(roomIndex, 1);
             }
 
             socket.leave(socket.roomId);
