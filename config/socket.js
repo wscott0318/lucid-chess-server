@@ -45,13 +45,19 @@ module.exports = function (server) {
             socket.username = params.username;
             socket.roomId = rooms[roomIndex].id;
 
-            io.sockets.to( rooms[roomIndex].id ).emit( packet.socketEvents['SC_GameStarted'], { white: rooms[roomIndex].matchStatus.white, black: rooms[roomIndex].matchStatus.black } );
+            io.sockets.to( rooms[roomIndex].id ).emit( packet.socketEvents['SC_GameStarted'], { white: rooms[roomIndex].matchStatus.white, black: rooms[roomIndex].matchStatus.black, players: rooms[roomIndex].players } );
 
             const currentTurn = rooms[roomIndex].matchStatus.game.board.configuration.turn;
             const currentPlayer = rooms[roomIndex].matchStatus[ currentTurn ];
             io.sockets.to( rooms[roomIndex].id ).emit( packet.socketEvents['SC_ChangeTurn'], { currentTurn, currentPlayer } );
 
             rooms[roomIndex].status = packet.roomStatus['inProgress'];
+
+            const temp = {
+                id: currentTurn === 'white' ? rooms[roomIndex].matchStatus.black : rooms[roomIndex].matchStatus.white,
+                roomId: socket.roomId
+            }
+            startNewTimer(roomIndex, temp);
         }
     }
 
@@ -112,7 +118,7 @@ module.exports = function (server) {
         rooms[roomIndex].matchStatus.game.move(from, to);
         io.sockets.to( rooms[roomIndex].id ).emit( packet.socketEvents['SC_PerformMove'], { from, to, castling } );
 
-        changeTurn(roomIndex);
+        changeTurn(roomIndex, socket);
     }
 
     const handlePawnTransform = ( params, socket ) => {
@@ -128,10 +134,10 @@ module.exports = function (server) {
 
         io.sockets.to( rooms[roomIndex].id ).emit( packet.socketEvents['SC_PerformMove'], { from, to, castling: {}, pieceType } );
 
-        changeTurn(roomIndex);
+        changeTurn(roomIndex, socket);
     }
 
-    const changeTurn = (roomIndex) => {
+    const changeTurn = (roomIndex, socket) => {
         const currentTurn = rooms[roomIndex].matchStatus.game.board.configuration.turn;
         const currentPlayer = rooms[roomIndex].matchStatus[ currentTurn ];
 
@@ -160,6 +166,45 @@ module.exports = function (server) {
         const moves = jsChessEngine.moves( rooms[roomIndex].matchStatus.game.board.configuration );
 
         io.sockets.to( rooms[roomIndex].id ).emit( packet.socketEvents['SC_ChangeTurn'], { moves, game: rooms[roomIndex].matchStatus.game, currentTurn, currentPlayer, isFinished, lastMoveHistory, dangerKing } );
+
+        startNewTimer(roomIndex, socket);
+    }
+
+    const startNewTimer = (roomIndex, socket) => {
+        rooms[roomIndex].matchStatus.remainingTime = 30;
+
+        if( rooms[roomIndex].matchStatus.timeInterval )
+            clearInterval(rooms[roomIndex].matchStatus.timeInterval);
+
+        io.sockets.to( rooms[roomIndex].id ).emit( packet.socketEvents['SC_RemainingTime'], { remainingTime: rooms[roomIndex].matchStatus.remainingTime } );
+        rooms[roomIndex].matchStatus.timeInterval = setInterval(() => {
+            if( !rooms[roomIndex] ) {
+                return;
+            }
+
+            const currentRemaining = rooms[roomIndex].matchStatus.remainingTime;
+
+            if( currentRemaining === 0) {
+                const result = jsChessEngine.aiMove(rooms[roomIndex].matchStatus.game.board.configuration, 0);
+
+                const from = Object.keys(result)[0];
+                const to = result[from];
+
+                const temp = {};
+                temp.roomId = socket.roomId;
+                for( let i = 0; i < rooms[roomIndex].players.length; i++ ) {
+                    if( rooms[roomIndex].players[i].socketId != socket.id )
+                        temp.id = rooms[roomIndex].players[i].socketId;
+                }
+
+                handlePerformMove( { from, to }, temp );
+                return;
+            }
+
+            rooms[roomIndex].matchStatus.remainingTime = currentRemaining - 1;
+
+            io.sockets.to( rooms[roomIndex].id ).emit( packet.socketEvents['SC_RemainingTime'], { remainingTime: rooms[roomIndex].matchStatus.remainingTime } );
+        }, 1000);
     }
 
     const handleUnSelectPiece = ( params, socket ) => {
@@ -197,11 +242,17 @@ module.exports = function (server) {
             }
             rooms[roomIndex].status = packet.roomStatus['inProgress'];
 
-            io.sockets.to( rooms[roomIndex].id ).emit( packet.socketEvents['SC_GameStarted'], { white: rooms[roomIndex].matchStatus.white, black: rooms[roomIndex].matchStatus.black } );
+            io.sockets.to( rooms[roomIndex].id ).emit( packet.socketEvents['SC_GameStarted'], { white: rooms[roomIndex].matchStatus.white, black: rooms[roomIndex].matchStatus.black, players: rooms[roomIndex].players } );
 
             const currentTurn = rooms[roomIndex].matchStatus.game.board.configuration.turn;
             const currentPlayer = rooms[roomIndex].matchStatus[ currentTurn ];
             io.sockets.to( rooms[roomIndex].id ).emit( packet.socketEvents['SC_ChangeTurn'], { currentTurn, currentPlayer } );
+
+            const temp = {
+                id: currentTurn === 'white' ? rooms[roomIndex].matchStatus.black : rooms[roomIndex].matchStatus.white,
+                roomId: socket.roomId
+            }
+            startNewTimer(roomIndex, temp);
         }
     }
 
@@ -210,6 +261,8 @@ module.exports = function (server) {
             const roomIndex = getRoomIndexFromId( socket.roomId );
             if( roomIndex !== -1 && rooms[roomIndex] ) {
                 io.sockets.to(socket.roomId).emit( packet.socketEvents['SC_PlayerLogOut'], { username: socket.username } );
+                if( rooms[roomIndex] && rooms[roomIndex].matchStatus.timeInterval )
+                    clearInterval(rooms[roomIndex].matchStatus.timeInterval);
                 rooms.splice(roomIndex, 1);
             }
 
