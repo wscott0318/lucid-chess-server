@@ -23,5 +23,12 @@ module.exports = {
         'waiting': 0,
         'inProgress': 1,
         'finished': 2
+    },
+    items: {
+        iceWall: 0,
+        petrify: 1,
+        jumpyShoe: 2,
+        springPad: 3,
+        thunderstorm: 4
     }
 }

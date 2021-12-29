@@ -49,7 +49,10 @@ module.exports = function (server) {
 
             const currentTurn = rooms[roomIndex].matchStatus.game.board.configuration.turn;
             const currentPlayer = rooms[roomIndex].matchStatus[ currentTurn ];
-            io.sockets.to( rooms[roomIndex].id ).emit( packet.socketEvents['SC_ChangeTurn'], { currentTurn, currentPlayer } );
+
+            const randomItems = getRandomItems( rooms[roomIndex].matchStatus.game );
+            rooms[roomIndex].matchStatus.randomItems = randomItems;
+            io.sockets.to( rooms[roomIndex].id ).emit( packet.socketEvents['SC_ChangeTurn'], { currentTurn, currentPlayer, randomItems } );
 
             rooms[roomIndex].status = packet.roomStatus['inProgress'];
 
@@ -115,6 +118,8 @@ module.exports = function (server) {
             return;
         }
 
+        checkIfGetItem( rooms[roomIndex], to );
+
         rooms[roomIndex].matchStatus.game.move(from, to);
         io.sockets.to( rooms[roomIndex].id ).emit( packet.socketEvents['SC_PerformMove'], { from, to, castling } );
 
@@ -129,6 +134,8 @@ module.exports = function (server) {
 
         const { from, to, pieceType } = params;
 
+        checkIfGetItem( rooms[roomIndex], to );
+
         rooms[roomIndex].matchStatus.game.move( from, to );
         rooms[roomIndex].matchStatus.game.setPiece( to, pieceType );
 
@@ -138,6 +145,8 @@ module.exports = function (server) {
     }
 
     const changeTurn = (roomIndex, socket) => {
+        if( !rooms[roomIndex] ) return;
+
         const currentTurn = rooms[roomIndex].matchStatus.game.board.configuration.turn;
         const currentPlayer = rooms[roomIndex].matchStatus[ currentTurn ];
 
@@ -165,7 +174,32 @@ module.exports = function (server) {
 
         const moves = jsChessEngine.moves( rooms[roomIndex].matchStatus.game.board.configuration );
 
-        io.sockets.to( rooms[roomIndex].id ).emit( packet.socketEvents['SC_ChangeTurn'], { moves, game: rooms[roomIndex].matchStatus.game, currentTurn, currentPlayer, isFinished, lastMoveHistory, dangerKing } );
+        if( rooms[roomIndex].matchStatus.turnCount ) {
+            rooms[roomIndex].matchStatus.turnCount ++;
+        } else {
+            rooms[roomIndex].matchStatus.turnCount = 1;
+        }
+
+        let randomItems;
+        if( rooms[roomIndex].matchStatus.turnCount % 2 === 0 ) {
+            randomItems = getRandomItems( rooms[roomIndex].matchStatus.game );
+            rooms[roomIndex].matchStatus.randomItems = randomItems;
+        }
+
+        if( rooms[roomIndex].matchStatus.items ) {
+            const prevPlayer = rooms[roomIndex].matchStatus[ currentTurn === 'white' ? 'black' : 'white' ];
+
+            if( rooms[roomIndex].matchStatus.items[ prevPlayer ] ) {
+                rooms[roomIndex].matchStatus.items[ prevPlayer ].forEach((item, idx) => {
+                    item.life --;
+                    if( item.life < 0 ) {
+                        rooms[roomIndex].matchStatus.items[ prevPlayer ].splice(idx, 1);
+                    }
+                })
+            }
+        }
+
+        io.sockets.to( rooms[roomIndex].id ).emit( packet.socketEvents['SC_ChangeTurn'], { moves, game: rooms[roomIndex].matchStatus.game, currentTurn, currentPlayer, isFinished, lastMoveHistory, dangerKing, randomItems: rooms[roomIndex].matchStatus.randomItems, userItems: rooms[roomIndex].matchStatus.items } );
 
         startNewTimer(roomIndex, socket);
     }
@@ -246,7 +280,9 @@ module.exports = function (server) {
 
             const currentTurn = rooms[roomIndex].matchStatus.game.board.configuration.turn;
             const currentPlayer = rooms[roomIndex].matchStatus[ currentTurn ];
-            io.sockets.to( rooms[roomIndex].id ).emit( packet.socketEvents['SC_ChangeTurn'], { currentTurn, currentPlayer } );
+            const randomItems = getRandomItems( rooms[roomIndex].matchStatus.game );
+            rooms[roomIndex].matchStatus.randomItems = randomItems;
+            io.sockets.to( rooms[roomIndex].id ).emit( packet.socketEvents['SC_ChangeTurn'], { currentTurn, currentPlayer, randomItems } );
 
             const temp = {
                 id: currentTurn === 'white' ? rooms[roomIndex].matchStatus.black : rooms[roomIndex].matchStatus.white,
@@ -261,7 +297,7 @@ module.exports = function (server) {
             const roomIndex = getRoomIndexFromId( socket.roomId );
             if( roomIndex !== -1 && rooms[roomIndex] ) {
                 io.sockets.to(socket.roomId).emit( packet.socketEvents['SC_PlayerLogOut'], { username: socket.username } );
-                if( rooms[roomIndex] && rooms[roomIndex].matchStatus.timeInterval )
+                if( rooms[roomIndex] && rooms[roomIndex].matchStatus && rooms[roomIndex].matchStatus.timeInterval )
                     clearInterval(rooms[roomIndex].matchStatus.timeInterval);
                 rooms.splice(roomIndex, 1);
             }
@@ -339,5 +375,52 @@ module.exports = function (server) {
         }
 
         return totalCount === 0 || game.board.configuration.isFinished;
+    }
+
+    const getRandomItems = (game) => {
+        const count = 4 + helper.getRandomVal(2);   // get val 4 ~ 5
+
+        const itemArray = [];
+
+        for( let i = 0; i < count; i++ ) {
+            while(true) {
+                const letters = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
+                const val = helper.getRandomVal(64);    // get val 0 ~ 63
+                const letter = letters[ Math.floor(val / 8) ];
+                const num = val % 8;
+
+                const fen = letter + num;
+                
+                if( !game.board.configuration.pieces[fen] ) {
+                    itemArray.push({
+                        position: fen,
+                        type: helper.getRandomVal( 5 )
+                    })
+                    break;
+                }
+            }
+        }
+        return itemArray;
+    }
+
+    const checkIfGetItem = (room, to) => {
+        const itemIndex = room.matchStatus.randomItems.findIndex((item) => item.position === to);
+        if( itemIndex !== -1 ) {   // get the item
+            if( !room.matchStatus.items )
+                room.matchStatus.items = {};
+
+            const currentTurn = room.matchStatus.game.board.configuration.turn;
+            const currentPlayer = room.matchStatus[ currentTurn ];
+
+            if( !room.matchStatus.items[ currentPlayer ] )
+                room.matchStatus.items[ currentPlayer ] = [];
+
+            const idx = room.matchStatus.items[ currentPlayer ].findIndex((item) => item.type === room.matchStatus.randomItems[ itemIndex ].type );
+
+            if( idx === -1 && room.matchStatus.randomItems[ itemIndex ].type <= 2 )    // only get one same item *** only activate items
+                room.matchStatus.items[ currentPlayer ].push( { ...room.matchStatus.randomItems[ itemIndex ], life: 2 } );
+
+            room.matchStatus.randomItems.splice( itemIndex, 1 );
+        }
     }
 };
