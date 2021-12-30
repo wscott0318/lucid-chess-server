@@ -72,28 +72,36 @@ module.exports = function (server) {
 
         const { fen } = params;
 
-        const newGame = new jsChessEngine.Game( rooms[roomIndex].matchStatus.game.board.configuration );
+        let possibleMoves = [];
 
-        if( rooms[roomIndex].matchStatus.obstacleArray ) {
-            rooms[roomIndex].matchStatus.obstacleArray.forEach((obstacle) => {
-                if( obstacle.type === packet.items['iceWall'] ) {
-                    const piece = newGame.board.configuration.turn === 'white' ? 'P' : 'p';
-                    newGame.setPiece( obstacle.position, piece );
-                }
-            });
+        if( !rooms[roomIndex].matchStatus.obstacleArray )
+            rooms[roomIndex].matchStatus.obstacleArray = [];
+
+        const blockIndex = rooms[roomIndex].matchStatus.obstacleArray.findIndex((obstacle) => obstacle.position === fen && obstacle.type === packet.items['petrify']);
+        if( blockIndex !== -1 ) {
+            possibleMoves = [];
+        } else {
+            const newGame = new jsChessEngine.Game( rooms[roomIndex].matchStatus.game.board.configuration );
+
+            if( rooms[roomIndex].matchStatus.obstacleArray ) {
+                rooms[roomIndex].matchStatus.obstacleArray.forEach((obstacle) => {
+                    if( obstacle.type === packet.items['iceWall'] ) {
+                        const piece = newGame.board.configuration.turn === 'white' ? 'P' : 'p';
+                        newGame.setPiece( obstacle.position, piece );
+                    }
+                });
+            }
+    
+            possibleMoves = newGame.moves(fen);
+    
+            if( rooms[roomIndex].matchStatus.obstacleArray ) {
+                rooms[roomIndex].matchStatus.obstacleArray.forEach((obstacle) => {
+                    if( obstacle.type === packet.items['iceWall'] ) {
+                        newGame.removePiece( obstacle.position );
+                    }
+                });
+            }
         }
-
-        const possibleMoves = newGame.moves(fen);
-
-        if( rooms[roomIndex].matchStatus.obstacleArray ) {
-            rooms[roomIndex].matchStatus.obstacleArray.forEach((obstacle) => {
-                if( obstacle.type === packet.items['iceWall'] ) {
-                    newGame.removePiece( obstacle.position );
-                }
-            });
-        }
-
-        // const possibleMoves = rooms[roomIndex].matchStatus.game.moves(fen);
 
         io.sockets.to( rooms[roomIndex].id ).emit( packet.socketEvents['SC_SelectPiece'], { fen, possibleMoves } );
     }
@@ -357,19 +365,24 @@ module.exports = function (server) {
                 const piece = room.matchStatus.game.board.configuration.pieces[effectArray[i]];
                 if( piece ) return;
             }
-
-            if( !room.matchStatus.obstacleArray )
-                room.matchStatus.obstacleArray = [];
-
-            effectArray.forEach((item) => {
-                room.matchStatus.obstacleArray.push({
-                    position: item,
-                    type: itemType,
-                    caster: socket.id,
-                    life: 2,
-                })
-            })
         }
+
+        if( itemType === packet.items['petrify'] ) {
+            const piece = room.matchStatus.game.board.configuration.pieces[effectArray[0]];
+            if( !piece || piece === 'Q' || piece === 'q' || piece === 'K' || piece === 'k' ) return;
+        }
+
+        if( !room.matchStatus.obstacleArray )
+            room.matchStatus.obstacleArray = [];
+
+        effectArray.forEach((item) => {
+            room.matchStatus.obstacleArray.push({
+                position: item,
+                type: itemType,
+                caster: socket.id,
+                life: 2,
+            })
+        })
 
         const index = room.matchStatus.items[ socket.id ].findIndex((item) => item.type === itemType);
         room.matchStatus.items[ socket.id ].splice(index, 1);
@@ -483,7 +496,7 @@ module.exports = function (server) {
                 
                 const idx = itemArray.findIndex((item) => item.position === fen);
 
-                const type = packet.items [ Object.keys( packet.items )[ helper.getRandomVal(1) ] ];
+                const type = packet.items [ Object.keys( packet.items )[ helper.getRandomVal(2) ] ];
 
                 if( !game.board.configuration.pieces[fen] && idx === -1 ) {
                     itemArray.push({
