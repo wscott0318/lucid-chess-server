@@ -115,6 +115,10 @@ module.exports = function (server) {
             || ( currentTurn === 'black' && fromPiece === 'p' && helper.getMatrixIndexFromFen(to)['rowIndex'] === 0 )
         ) {
             io.sockets.to( rooms[roomIndex].id ).emit( packet.socketEvents['SC_PawnTransform'], { from, to } );
+  
+            if( rooms[roomIndex].matchStatus.timeInterval )
+                clearInterval(rooms[roomIndex].matchStatus.timeInterval);
+
             return;
         }
 
@@ -151,8 +155,12 @@ module.exports = function (server) {
         const currentPlayer = rooms[roomIndex].matchStatus[ currentTurn ];
 
         const isFinished = checkIfFinished(rooms[roomIndex].matchStatus.game);
-        if( isFinished )
+        if( isFinished ) {
             rooms[roomIndex].status = packet.roomStatus['finished'];
+            
+            if( rooms[roomIndex].matchStatus.timeInterval )
+                clearInterval(rooms[roomIndex].matchStatus.timeInterval);
+        }
 
         let lastMoveHistory = null;
         if( rooms[roomIndex].matchStatus.game.board.history.length > 0 ) {
@@ -201,11 +209,12 @@ module.exports = function (server) {
 
         io.sockets.to( rooms[roomIndex].id ).emit( packet.socketEvents['SC_ChangeTurn'], { moves, game: rooms[roomIndex].matchStatus.game, currentTurn, currentPlayer, isFinished, lastMoveHistory, dangerKing, randomItems: rooms[roomIndex].matchStatus.randomItems, userItems: rooms[roomIndex].matchStatus.items } );
 
-        startNewTimer(roomIndex, socket);
+        if( !isFinished )
+            startNewTimer(roomIndex, socket);
     }
 
     const startNewTimer = (roomIndex, socket) => {
-        rooms[roomIndex].matchStatus.remainingTime = 30;
+        rooms[roomIndex].matchStatus.remainingTime = packet.timeLimit;
 
         if( rooms[roomIndex].matchStatus.timeInterval )
             clearInterval(rooms[roomIndex].matchStatus.timeInterval);
@@ -218,7 +227,7 @@ module.exports = function (server) {
 
             const currentRemaining = rooms[roomIndex].matchStatus.remainingTime;
 
-            if( currentRemaining === 0) {
+            if( currentRemaining === 0 && rooms[roomIndex].status !== packet.roomStatus['finished']) {
                 const result = jsChessEngine.aiMove(rooms[roomIndex].matchStatus.game.board.configuration, 0);
 
                 const from = Object.keys(result)[0];
@@ -387,14 +396,16 @@ module.exports = function (server) {
                 const letters = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
                 const val = helper.getRandomVal(64);    // get val 0 ~ 63
                 const letter = letters[ Math.floor(val / 8) ];
-                const num = val % 8;
+                const num = val % 8 + 1;
 
                 const fen = letter + num;
                 
-                if( !game.board.configuration.pieces[fen] ) {
+                const idx = itemArray.findIndex((item) => item.position === fen);
+
+                if( !game.board.configuration.pieces[fen] && idx === -1 ) {
                     itemArray.push({
                         position: fen,
-                        type: helper.getRandomVal( 5 )
+                        type: helper.getRandomVal( 1 )
                     })
                     break;
                 }

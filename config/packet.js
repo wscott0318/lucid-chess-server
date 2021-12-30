@@ -30,5 +30,6 @@ module.exports = {
         jumpyShoe: 2,
         springPad: 3,
         thunderstorm: 4
-    }
+    },
+    timeLimit: 30,
 }
