@@ -95,7 +95,7 @@ module.exports = function (server) {
 
         // const possibleMoves = rooms[roomIndex].matchStatus.game.moves(fen);
 
-        io.sockets.to( rooms[roomIndex].id ).emit( packet.socketEvents['SC_SelectPiece'], { fen, possibleMoves, newGame, game: rooms[roomIndex].matchStatus.game } );
+        io.sockets.to( rooms[roomIndex].id ).emit( packet.socketEvents['SC_SelectPiece'], { fen, possibleMoves } );
     }
 
     const handlePerformMove = ( params, socket ) => {
@@ -268,19 +268,22 @@ module.exports = function (server) {
             const currentRemaining = rooms[roomIndex].matchStatus.remainingTime;
 
             if( currentRemaining === 0 && rooms[roomIndex].status !== packet.roomStatus['finished']) {
-                const result = jsChessEngine.aiMove(rooms[roomIndex].matchStatus.game.board.configuration, 0);
+                // const result = jsChessEngine.aiMove(rooms[roomIndex].matchStatus.game.board.configuration, 0);
 
-                const from = Object.keys(result)[0];
-                const to = result[from];
+                // const from = Object.keys(result)[0];
+                // const to = result[from];
 
-                const temp = {};
-                temp.roomId = socket.roomId;
-                for( let i = 0; i < rooms[roomIndex].players.length; i++ ) {
-                    if( rooms[roomIndex].players[i].socketId != socket.id )
-                        temp.id = rooms[roomIndex].players[i].socketId;
-                }
+                // const temp = {};
+                // temp.roomId = socket.roomId;
+                // for( let i = 0; i < rooms[roomIndex].players.length; i++ ) {
+                //     if( rooms[roomIndex].players[i].socketId != socket.id )
+                //         temp.id = rooms[roomIndex].players[i].socketId;
+                // }
 
-                handlePerformMove( { from, to }, temp );
+                // handlePerformMove( { from, to }, temp );
+
+                changeGameTurn(roomIndex);
+                changeTurn( roomIndex, socket );
                 return;
             }
 
