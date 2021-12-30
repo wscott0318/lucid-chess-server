@@ -7,6 +7,7 @@ module.exports = {
         'CS_PawnTransform': 0xff0005,
         'CS_UnSelectPiece': 0xff0006,
         'CS_MatchPlayLogin': 0xff0007,
+        'CS_ActivateItem': 0xff0008,
     
         'SC_RoomCreated': 0xff1001,
         'SC_GameStarted': 0xff1002,
@@ -18,6 +19,7 @@ module.exports = {
         'SC_PerformMove': 0xff1008,
         'SC_UnSelectPiece': 0xff0009,
         'SC_RemainingTime': 0xff0010,
+        'SC_ActivateItem': 0xff0011,
     },
     roomStatus: {
         'waiting': 0,
@@ -25,11 +27,11 @@ module.exports = {
         'finished': 2
     },
     items: {
-        iceWall: 0,
-        petrify: 1,
-        jumpyShoe: 2,
-        springPad: 3,
-        thunderstorm: 4
+        iceWall: 1,
+        petrify: 2,
+        jumpyShoe: 3,
+        springPad: 4,
+        thunderstorm: 5
     },
     timeLimit: 30,
 }

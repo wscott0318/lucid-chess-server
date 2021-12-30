@@ -71,9 +71,31 @@ module.exports = function (server) {
             return;
 
         const { fen } = params;
-        const possibleMoves = rooms[roomIndex].matchStatus.game.moves(fen);
 
-        io.sockets.to( rooms[roomIndex].id ).emit( packet.socketEvents['SC_SelectPiece'], { fen, possibleMoves } );
+        const newGame = new jsChessEngine.Game( rooms[roomIndex].matchStatus.game.board.configuration );
+
+        if( rooms[roomIndex].matchStatus.obstacleArray ) {
+            rooms[roomIndex].matchStatus.obstacleArray.forEach((obstacle) => {
+                if( obstacle.type === packet.items['iceWall'] ) {
+                    const piece = newGame.board.configuration.turn === 'white' ? 'P' : 'p';
+                    newGame.setPiece( obstacle.position, piece );
+                }
+            });
+        }
+
+        const possibleMoves = newGame.moves(fen);
+
+        if( rooms[roomIndex].matchStatus.obstacleArray ) {
+            rooms[roomIndex].matchStatus.obstacleArray.forEach((obstacle) => {
+                if( obstacle.type === packet.items['iceWall'] ) {
+                    newGame.removePiece( obstacle.position );
+                }
+            });
+        }
+
+        // const possibleMoves = rooms[roomIndex].matchStatus.game.moves(fen);
+
+        io.sockets.to( rooms[roomIndex].id ).emit( packet.socketEvents['SC_SelectPiece'], { fen, possibleMoves, newGame, game: rooms[roomIndex].matchStatus.game } );
     }
 
     const handlePerformMove = ( params, socket ) => {
@@ -207,7 +229,25 @@ module.exports = function (server) {
             }
         }
 
-        io.sockets.to( rooms[roomIndex].id ).emit( packet.socketEvents['SC_ChangeTurn'], { moves, game: rooms[roomIndex].matchStatus.game, currentTurn, currentPlayer, isFinished, lastMoveHistory, dangerKing, randomItems: rooms[roomIndex].matchStatus.randomItems, userItems: rooms[roomIndex].matchStatus.items } );
+        if( rooms[roomIndex].matchStatus.obstacleArray ) {
+            rooms[roomIndex].matchStatus.obstacleArray.forEach((item) => item.life -- );
+            rooms[roomIndex].matchStatus.obstacleArray = rooms[roomIndex].matchStatus.obstacleArray.filter((item) => item.life > 0);
+        }
+
+        const data = { 
+            moves, 
+            game: rooms[roomIndex].matchStatus.game, 
+            currentTurn, 
+            currentPlayer, 
+            isFinished, 
+            lastMoveHistory, 
+            dangerKing, 
+            randomItems: rooms[roomIndex].matchStatus.randomItems, 
+            userItems: rooms[roomIndex].matchStatus.items,
+            obstacleArray: rooms[roomIndex].matchStatus.obstacleArray
+        };
+
+        io.sockets.to( rooms[roomIndex].id ).emit( packet.socketEvents['SC_ChangeTurn'], data );
 
         if( !isFinished )
             startNewTimer(roomIndex, socket);
@@ -301,6 +341,39 @@ module.exports = function (server) {
         }
     }
 
+    const handleActivateItem = ( params, socket ) => {
+        const { effectArray, type } = params;
+
+        const roomIndex = getRoomIndexFromId( socket.roomId );
+        const room = rooms[roomIndex];
+
+        const itemType = type;
+
+        if( itemType === packet.items['iceWall'] ) {
+            for( let i = 0; i < effectArray.length; i++ ) {
+                const piece = room.matchStatus.game.board.configuration.pieces[effectArray[i]];
+                if( piece ) return;
+            }
+
+            if( !room.matchStatus.obstacleArray )
+                room.matchStatus.obstacleArray = [];
+
+            effectArray.forEach((item) => {
+                room.matchStatus.obstacleArray.push({
+                    position: item,
+                    type: itemType,
+                    caster: socket.id,
+                    life: 2,
+                })
+            })
+        }
+
+        const index = room.matchStatus.items[ socket.id ].findIndex((item) => item.type === itemType);
+        room.matchStatus.items[ socket.id ].splice(index, 1);
+
+        io.sockets.to( room.id ).emit( packet.socketEvents['SC_ActivateItem'], {obstacleArray: room.matchStatus.obstacleArray, userItems: room.matchStatus.items} );
+    }
+
     const handleDisconnect = (socket) => {
         if( socket.roomId ) {
             const roomIndex = getRoomIndexFromId( socket.roomId );
@@ -324,6 +397,7 @@ module.exports = function (server) {
         socket.on(packet.socketEvents['CS_PawnTransform'], (params) => handlePawnTransform( params, socket ));
         socket.on(packet.socketEvents['CS_UnSelectPiece'], (params) => handleUnSelectPiece( params, socket ));
         socket.on(packet.socketEvents['CS_MatchPlayLogin'], (params) => handleMatchPlayLogin( params, socket ));
+        socket.on(packet.socketEvents['CS_ActivateItem'], (params) => handleActivateItem( params, socket ));
         socket.on('disconnect', () => handleDisconnect(socket));
     });
 
@@ -402,10 +476,12 @@ module.exports = function (server) {
                 
                 const idx = itemArray.findIndex((item) => item.position === fen);
 
+                const type = packet.items [ Object.keys( packet.items )[ helper.getRandomVal(1) ] ];
+
                 if( !game.board.configuration.pieces[fen] && idx === -1 ) {
                     itemArray.push({
                         position: fen,
-                        type: helper.getRandomVal( 1 )
+                        type: type,
                     })
                     break;
                 }
