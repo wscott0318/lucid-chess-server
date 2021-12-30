@@ -372,6 +372,10 @@ module.exports = function (server) {
         room.matchStatus.items[ socket.id ].splice(index, 1);
 
         io.sockets.to( room.id ).emit( packet.socketEvents['SC_ActivateItem'], {obstacleArray: room.matchStatus.obstacleArray, userItems: room.matchStatus.items} );
+
+        changeGameTurn(roomIndex);
+
+        changeTurn(roomIndex, socket);
     }
 
     const handleDisconnect = (socket) => {
@@ -509,5 +513,9 @@ module.exports = function (server) {
 
             room.matchStatus.randomItems.splice( itemIndex, 1 );
         }
+    }
+
+    const changeGameTurn = ( roomIndex ) => {
+        rooms[roomIndex].matchStatus.game.board.configuration.turn = rooms[roomIndex].matchStatus.game.board.configuration.turn === 'white' ? 'black' : 'white';
     }
 };
