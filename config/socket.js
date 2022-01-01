@@ -505,8 +505,8 @@ module.exports = function (server) {
                 
                 const idx = itemArray.findIndex((item) => item.position === fen);
 
-                // const type = packet.items [ Object.keys( packet.items )[ helper.getRandomVal(5) ] ];
-                const type = packet.items ['thunderstorm'];
+                const type = packet.items [ Object.keys( packet.items )[ helper.getRandomVal(5) ] ];
+                // const type = packet.items ['thunderstorm'];
 
                 if( !game.board.configuration.pieces[fen] && idx === -1 ) {
                     itemArray.push({
