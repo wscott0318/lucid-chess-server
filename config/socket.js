@@ -19,7 +19,9 @@ module.exports = function (server) {
     const handleCreateRoom = (params, socket) => {
         const roomId = createNewRoom( params.friendMatch, socket, params.username, params.roomName );
 
-        socket.emit( packet.socketEvents['SC_RoomCreated'], { roomId: roomId, roomName: params.roomName } );
+        const roomIndex = getRoomIndexFromId( roomId );
+
+        socket.emit( packet.socketEvents['SC_RoomCreated'], { roomId: roomId, roomName: params.roomName, roomKey: rooms[roomIndex].roomKey } );
     }
 
     const handleJoinRoom = (params, socket) => {
@@ -38,7 +40,7 @@ module.exports = function (server) {
             socket.username = params.username;
             socket.roomId = rooms[roomIndex].id;
 
-            socket.emit( packet.socketEvents['SC_JoinRoom'], { roomName: rooms[roomIndex].roomName } );
+            socket.emit( packet.socketEvents['SC_JoinRoom'], { roomName: rooms[roomIndex].roomName, roomKey: rooms[roomIndex].roomKey } );
         }
     }
 
@@ -441,6 +443,8 @@ module.exports = function (server) {
     
     const createNewRoom = (friendMatch, socket, username, roomName) => {
         const roomId = getNewRoomId();
+        const roomKey = helper.randomString(64);
+
         const status = packet.roomStatus['waiting'];
         const players = [{
             socketId: socket.id,
@@ -452,7 +456,8 @@ module.exports = function (server) {
             players,
             friendMatch,
             status,
-            roomName
+            roomName,
+            roomKey,
         };
 
         rooms.push(roomInfo);

@@ -8,7 +8,8 @@ module.exports = {
     },
 
     randomString: function (length) {
-        var chars = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghiklmnopqrstuvwxyz';
+        // var chars = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghiklmnopqrstuvwxyz';
+        var chars = '0123456789';
 
         var string = '';
 
@@ -17,7 +18,7 @@ module.exports = {
             string += chars.substring(randomNumber, randomNumber + 1);
         }
 
-        return string;
+        return string + Date.now();
     },
 
     getRandomVal: (range) => Math.ceil(Math.random() * 100000000) % range,
