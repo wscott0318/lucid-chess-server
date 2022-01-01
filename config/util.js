@@ -1,4 +1,5 @@
 var crypto = require('crypto');
+var { alphaBet } = require('./packet');
 
 module.exports = {
 
@@ -22,8 +23,6 @@ module.exports = {
     getRandomVal: (range) => Math.ceil(Math.random() * 100000000) % range,
 
     getMatrixIndexFromFen: (val) => {
-        const alphaBet = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
-
         return ({
             rowIndex: val[1] - 1,
             colIndex: alphaBet.indexOf(val[0])

@@ -34,4 +34,5 @@ module.exports = {
         thunderstorm: 5
     },
     timeLimit: 30,
+    alphaBet: ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'],
 }

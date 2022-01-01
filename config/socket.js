@@ -1,3 +1,5 @@
+const { alphaBet } = require('./packet');
+
 module.exports = function (server) {
     const packet = require('./packet');
     const helper = require('./util');
@@ -152,7 +154,7 @@ module.exports = function (server) {
             return;
         }
 
-        checkIfGetItem( rooms[roomIndex], to );
+        checkIfGetItem( rooms[roomIndex], to, socket );
 
         rooms[roomIndex].matchStatus.game.move(from, to);
         io.sockets.to( rooms[roomIndex].id ).emit( packet.socketEvents['SC_PerformMove'], { from, to, castling } );
@@ -168,7 +170,7 @@ module.exports = function (server) {
 
         const { from, to, pieceType } = params;
 
-        checkIfGetItem( rooms[roomIndex], to );
+        checkIfGetItem( rooms[roomIndex], to, socket );
 
         rooms[roomIndex].matchStatus.game.move( from, to );
         rooms[roomIndex].matchStatus.game.setPiece( to, pieceType );
@@ -496,7 +498,8 @@ module.exports = function (server) {
                 
                 const idx = itemArray.findIndex((item) => item.position === fen);
 
-                const type = packet.items [ Object.keys( packet.items )[ helper.getRandomVal(2) ] ];
+                // const type = packet.items [ Object.keys( packet.items )[ helper.getRandomVal(5) ] ];
+                const type = packet.items ['thunderstorm'];
 
                 if( !game.board.configuration.pieces[fen] && idx === -1 ) {
                     itemArray.push({
@@ -510,7 +513,7 @@ module.exports = function (server) {
         return itemArray;
     }
 
-    const checkIfGetItem = (room, to) => {
+    const checkIfGetItem = (room, to, socket) => {
         const itemIndex = room.matchStatus.randomItems.findIndex((item) => item.position === to);
         if( itemIndex !== -1 ) {   // get the item
             if( !room.matchStatus.items )
@@ -524,8 +527,80 @@ module.exports = function (server) {
 
             const idx = room.matchStatus.items[ currentPlayer ].findIndex((item) => item.type === room.matchStatus.randomItems[ itemIndex ].type );
 
-            if( idx === -1 && room.matchStatus.randomItems[ itemIndex ].type <= 2 )    // only get one same item *** only activate items
+            if( idx === -1 && room.matchStatus.randomItems[ itemIndex ].type <= packet.items['jumpyShoe'] )    // only get one same item *** only activate items
                 room.matchStatus.items[ currentPlayer ].push( { ...room.matchStatus.randomItems[ itemIndex ], life: 2 } );
+            
+            if( room.matchStatus.randomItems[ itemIndex ].type === packet.items['springPad'] ) {    // when get springpad trap
+                const game = room.matchStatus.game;
+                setTimeout(() => {
+                    const matrixIndex = helper.getMatrixIndexFromFen( to );
+                    if( currentTurn === 'white' )
+                        matrixIndex.rowIndex = matrixIndex.rowIndex - 1;
+                    else {
+                        matrixIndex.rowIndex = matrixIndex.rowIndex + 1;
+                    }
+
+                    if( matrixIndex.rowIndex < 1 || matrixIndex.rowIndex > 8 ) {
+                        return;
+                    }
+
+                    // move to position
+                    const fromPosition = to;
+                    const toPosition = helper.getFenFromMatrixIndex( matrixIndex.rowIndex, matrixIndex.colIndex );
+
+                    const chessmanFrom = game.board.getPiece(fromPosition)
+
+                    Object.assign(game.board.configuration.pieces, { [toPosition]: chessmanFrom });
+                    delete game.board.configuration.pieces[ fromPosition ];
+            
+                    io.sockets.to( room.id ).emit( packet.socketEvents['SC_PerformMove'], { from: fromPosition, to: toPosition, castling: {} } );
+                }, 700);
+            }
+
+            if( room.matchStatus.randomItems[ itemIndex ].type === packet.items['thunderstorm'] ) {
+                const game = room.matchStatus.game;
+                const count = Object.keys(game.board.configuration.pieces).length;
+
+                const randomPositions = [];
+                for( let i = 0; i < 2; i++ ) {
+                    while(true) {
+                        const val = helper.getRandomVal(count);
+
+                        const fen = Object.keys(game.board.configuration.pieces)[ val ];
+
+                        const index = randomPositions.findIndex((item) => item === fen);
+
+                        if( index === -1 && game.board.configuration.pieces[ fen ] !== 'Q' && game.board.configuration.pieces[ fen ] !== 'q' && game.board.configuration.pieces[ fen ] !== 'K' && game.board.configuration.pieces[ fen ] !== 'k' ) {
+                            if( !room.matchStatus.obstacleArray )
+                                room.matchStatus.obstacleArray = [];
+
+                            let mySide;
+                            if( currentPlayer === socket.id  )
+                                mySide = currentTurn;
+                            else
+                                mySide = currentTurn === 'white' ? 'black' : 'white';
+
+                            let life;
+                            if( (mySide === 'white' && game.board.configuration.pieces[ fen ] === game.board.configuration.pieces[ fen ].toUpperCase()) 
+                                || (mySide === 'black' && game.board.configuration.pieces[ fen ] !== game.board.configuration.pieces[ fen ].toUpperCase())
+                            ) {
+                                life = 3;
+                            } else {
+                                life = 2;
+                            }
+
+                            room.matchStatus.obstacleArray.push({
+                                position: fen,
+                                type: packet.items['petrify'],
+                                life: life,
+                            })
+
+                            randomPositions.push(fen);
+                            break;
+                        }
+                    }
+                }
+            }
 
             room.matchStatus.randomItems.splice( itemIndex, 1 );
         }
