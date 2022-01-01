@@ -1,4 +1,4 @@
-const { alphaBet } = require('./packet');
+const { alphaBet, roomStatus } = require('./packet');
 
 module.exports = function (server) {
     const packet = require('./packet');
@@ -17,15 +17,14 @@ module.exports = function (server) {
     // }, 1000);
 
     const handleCreateRoom = (params, socket) => {
-        const roomId = createNewRoom( params.friendMatch, socket, params.username );
+        const roomId = createNewRoom( params.friendMatch, socket, params.username, params.roomName );
 
-        socket.emit( packet.socketEvents['SC_RoomCreated'], { roomId: roomId } );
+        socket.emit( packet.socketEvents['SC_RoomCreated'], { roomId: roomId, roomName: params.roomName } );
     }
 
     const handleJoinRoom = (params, socket) => {
         const roomIndex = getRoomIndexFromId( params.roomId );
         if( roomIndex === -1 || rooms[roomIndex].players.length === 0 || !rooms[roomIndex].friendMatch ) {    // when room doesn't exist, create the match matching room
-            // createNewRoom( false, socket, params.username );
             socket.emit( packet.socketEvents['SC_ForceExit'], { message: 'Friend Match Room does not exist.' } );
         } else if( rooms[roomIndex].players.length > 1 ) {  // already more than 2 players on the room
             socket.emit( packet.socketEvents['SC_ForceExit'], { message: 'Another player already joined.' } );
@@ -34,35 +33,12 @@ module.exports = function (server) {
                 socketId: socket.id,
                 username: params.username
             });
-            const whiteIndex = helper.getRandomVal(2);
-            const blackIndex = whiteIndex === 0 ? 1 : 0;
-
-            rooms[roomIndex].matchStatus = {
-                game: new jsChessEngine.Game(),
-                white: rooms[roomIndex].players[ whiteIndex ].socketId,
-                black: rooms[roomIndex].players[ blackIndex ].socketId,
-            }
 
             socket.join(rooms[roomIndex].id);
             socket.username = params.username;
             socket.roomId = rooms[roomIndex].id;
 
-            io.sockets.to( rooms[roomIndex].id ).emit( packet.socketEvents['SC_GameStarted'], { white: rooms[roomIndex].matchStatus.white, black: rooms[roomIndex].matchStatus.black, players: rooms[roomIndex].players } );
-
-            const currentTurn = rooms[roomIndex].matchStatus.game.board.configuration.turn;
-            const currentPlayer = rooms[roomIndex].matchStatus[ currentTurn ];
-
-            const randomItems = getRandomItems( rooms[roomIndex].matchStatus.game );
-            rooms[roomIndex].matchStatus.randomItems = randomItems;
-            io.sockets.to( rooms[roomIndex].id ).emit( packet.socketEvents['SC_ChangeTurn'], { currentTurn, currentPlayer, randomItems } );
-
-            rooms[roomIndex].status = packet.roomStatus['inProgress'];
-
-            const temp = {
-                id: currentTurn === 'white' ? rooms[roomIndex].matchStatus.black : rooms[roomIndex].matchStatus.white,
-                roomId: socket.roomId
-            }
-            startNewTimer(roomIndex, temp);
+            socket.emit( packet.socketEvents['SC_JoinRoom'], { roomName: rooms[roomIndex].roomName } );
         }
     }
 
@@ -313,9 +289,9 @@ module.exports = function (server) {
     }
 
     const handleMatchPlayLogin = ( params, socket ) => {
-        const roomIndex = rooms.findIndex((item) => item.friendMatch === false && item.status === packet.roomStatus['waiting'] && item.players.length === 1 );
+        const roomIndex = rooms.findIndex((item) => item.friendMatch === false && item.status === packet.roomStatus['waiting'] && item.players.length === 1 && item.roomName === params.roomName );
         if( roomIndex === -1 ) {
-            createNewRoom( false, socket, params.username );
+            createNewRoom( false, socket, params.username, params.roomName );
         } else {
             // Join existing room
             rooms[roomIndex].players.push({
@@ -327,30 +303,7 @@ module.exports = function (server) {
             socket.roomId = rooms[roomIndex].id;
             socket.join( rooms[roomIndex].id );
 
-            // inital room process;
-            const whiteIndex = helper.getRandomVal(2);
-            const blackIndex = whiteIndex === 0 ? 1 : 0;
-
-            rooms[roomIndex].matchStatus = {
-                game: new jsChessEngine.Game(),
-                white: rooms[roomIndex].players[ whiteIndex ].socketId,
-                black: rooms[roomIndex].players[ blackIndex ].socketId,
-            }
-            rooms[roomIndex].status = packet.roomStatus['inProgress'];
-
-            io.sockets.to( rooms[roomIndex].id ).emit( packet.socketEvents['SC_GameStarted'], { white: rooms[roomIndex].matchStatus.white, black: rooms[roomIndex].matchStatus.black, players: rooms[roomIndex].players } );
-
-            const currentTurn = rooms[roomIndex].matchStatus.game.board.configuration.turn;
-            const currentPlayer = rooms[roomIndex].matchStatus[ currentTurn ];
-            const randomItems = getRandomItems( rooms[roomIndex].matchStatus.game );
-            rooms[roomIndex].matchStatus.randomItems = randomItems;
-            io.sockets.to( rooms[roomIndex].id ).emit( packet.socketEvents['SC_ChangeTurn'], { currentTurn, currentPlayer, randomItems } );
-
-            const temp = {
-                id: currentTurn === 'white' ? rooms[roomIndex].matchStatus.black : rooms[roomIndex].matchStatus.white,
-                roomId: socket.roomId
-            }
-            startNewTimer(roomIndex, temp);
+            rooms[roomIndex].status = packet.roomStatus['waiting'];
         }
     }
 
@@ -396,14 +349,61 @@ module.exports = function (server) {
         changeTurn(roomIndex, socket);
     }
 
+    const handleReadyMatch = ( socket ) => {
+        const roomIndex = getRoomIndexFromId( socket.roomId );
+        const room = rooms[roomIndex];
+
+        const playerIndex = room.players.findIndex((player) => player.socketId === socket.id);
+        room.players[ playerIndex ].ready = true;
+
+        if( room.players.length >= 2 && room.players[0].ready && room.players[1].ready ) {
+            // inital room process;
+            const whiteIndex = helper.getRandomVal(2);
+            const blackIndex = whiteIndex === 0 ? 1 : 0;
+
+            rooms[roomIndex].matchStatus = {
+                game: new jsChessEngine.Game(),
+                white: rooms[roomIndex].players[ whiteIndex ].socketId,
+                black: rooms[roomIndex].players[ blackIndex ].socketId,
+            }
+            rooms[roomIndex].status = packet.roomStatus['inProgress'];
+
+            io.sockets.to( rooms[roomIndex].id ).emit( packet.socketEvents['SC_GameStarted'], { white: rooms[roomIndex].matchStatus.white, black: rooms[roomIndex].matchStatus.black, players: rooms[roomIndex].players } );
+
+            const currentTurn = rooms[roomIndex].matchStatus.game.board.configuration.turn;
+            const currentPlayer = rooms[roomIndex].matchStatus[ currentTurn ];
+
+            const randomItems = getRandomItems( rooms[roomIndex].matchStatus.game );
+            rooms[roomIndex].matchStatus.randomItems = randomItems;
+            io.sockets.to( rooms[roomIndex].id ).emit( packet.socketEvents['SC_ChangeTurn'], { currentTurn, currentPlayer, randomItems } );
+
+            const temp = {
+                id: currentTurn === 'white' ? rooms[roomIndex].matchStatus.black : rooms[roomIndex].matchStatus.white,
+                roomId: socket.roomId
+            }
+            startNewTimer(roomIndex, temp);
+        }
+    }
+
     const handleDisconnect = (socket) => {
         if( socket.roomId ) {
             const roomIndex = getRoomIndexFromId( socket.roomId );
+
             if( roomIndex !== -1 && rooms[roomIndex] ) {
-                io.sockets.to(socket.roomId).emit( packet.socketEvents['SC_PlayerLogOut'], { username: socket.username } );
-                if( rooms[roomIndex] && rooms[roomIndex].matchStatus && rooms[roomIndex].matchStatus.timeInterval )
-                    clearInterval(rooms[roomIndex].matchStatus.timeInterval);
-                rooms.splice(roomIndex, 1);
+                if( rooms[roomIndex].roomStatus === roomStatus['waiting'] && rooms[roomIndex].players.length < 2 ) {
+                    rooms.splice(roomIndex, 1);
+                } else if( rooms[roomIndex].roomStatus === roomStatus['waiting'] && rooms[roomIndex].players.length >= 2 ) {
+                    const players = rooms[roomIndex].players;
+                    const playerIndex = players.findIndex((player) => player.socketId === socket.id);
+
+                    if( playerIndex !== -1 )
+                        players.splice(playerIndex, 1);
+                } else {
+                    io.sockets.to(socket.roomId).emit( packet.socketEvents['SC_PlayerLogOut'], { username: socket.username } );
+                    if( rooms[roomIndex] && rooms[roomIndex].matchStatus && rooms[roomIndex].matchStatus.timeInterval )
+                        clearInterval(rooms[roomIndex].matchStatus.timeInterval);
+                    rooms.splice(roomIndex, 1);
+                }
             }
 
             socket.leave(socket.roomId);
@@ -420,6 +420,7 @@ module.exports = function (server) {
         socket.on(packet.socketEvents['CS_UnSelectPiece'], (params) => handleUnSelectPiece( params, socket ));
         socket.on(packet.socketEvents['CS_MatchPlayLogin'], (params) => handleMatchPlayLogin( params, socket ));
         socket.on(packet.socketEvents['CS_ActivateItem'], (params) => handleActivateItem( params, socket ));
+        socket.on(packet.socketEvents['CS_Ready'], () => handleReadyMatch( socket ));
         socket.on('disconnect', () => handleDisconnect(socket));
     });
 
@@ -438,7 +439,7 @@ module.exports = function (server) {
         return roomId;
     }
     
-    const createNewRoom = (friendMatch, socket, username) => {
+    const createNewRoom = (friendMatch, socket, username, roomName) => {
         const roomId = getNewRoomId();
         const status = packet.roomStatus['waiting'];
         const players = [{
@@ -450,7 +451,8 @@ module.exports = function (server) {
             id: roomId,
             players,
             friendMatch,
-            status
+            status,
+            roomName
         };
 
         rooms.push(roomInfo);
