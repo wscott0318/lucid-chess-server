@@ -311,7 +311,7 @@ module.exports = function (server) {
 
             rooms[roomIndex].status = packet.roomStatus['waiting'];
 
-            socket.emit( packet.socketEvents['SC_RoomCreated'], { roomId: roomId, roomName: params.roomName, roomKey: rooms[roomIndex].roomKey } );
+            socket.emit( packet.socketEvents['SC_RoomCreated'], { roomId: rooms[roomIndex].id, roomName: params.roomName, roomKey: rooms[roomIndex].roomKey } );
         }
     }
 
