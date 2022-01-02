@@ -293,7 +293,11 @@ module.exports = function (server) {
     const handleMatchPlayLogin = ( params, socket ) => {
         const roomIndex = rooms.findIndex((item) => item.friendMatch === false && item.status === packet.roomStatus['waiting'] && item.players.length === 1 && item.roomName === params.roomName );
         if( roomIndex === -1 ) {
-            createNewRoom( false, socket, params.username, params.roomName );
+            const roomId = createNewRoom( false, socket, params.username, params.roomName );
+
+            const tempIndex = getRoomIndexFromId( roomId );
+
+            socket.emit( packet.socketEvents['SC_RoomCreated'], { roomId: roomId, roomName: params.roomName, roomKey: rooms[tempIndex].roomKey } );
         } else {
             // Join existing room
             rooms[roomIndex].players.push({
@@ -306,6 +310,8 @@ module.exports = function (server) {
             socket.join( rooms[roomIndex].id );
 
             rooms[roomIndex].status = packet.roomStatus['waiting'];
+
+            socket.emit( packet.socketEvents['SC_RoomCreated'], { roomId: roomId, roomName: params.roomName, roomKey: rooms[roomIndex].roomKey } );
         }
     }
 
