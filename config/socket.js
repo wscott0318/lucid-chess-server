@@ -1,4 +1,5 @@
 const { alphaBet, roomStatus } = require('./packet');
+const { getMatrixIndexFromFen, getFenFromMatrixIndex } = require('./util');
 
 module.exports = function (server) {
     const packet = require('./packet');
@@ -50,7 +51,7 @@ module.exports = function (server) {
         if( !isRightPlayer(roomIndex, socket) )  // illegal player sent message
             return;
 
-        const { fen } = params;
+        const { fen, currentItem } = params;
 
         let possibleMoves = [];
 
@@ -73,6 +74,68 @@ module.exports = function (server) {
             }
     
             possibleMoves = newGame.moves(fen);
+
+            if( currentItem === packet.items['jumpyShoe'] ) {
+                const currentPiece = newGame.board.configuration.pieces[ fen ];
+                const matrixIndex = getMatrixIndexFromFen(fen);
+
+                if( currentPiece === 'P' ) {
+                    const nextFen = getFenFromMatrixIndex( matrixIndex.rowIndex + 1, matrixIndex.colIndex );
+                    const nextPiece = newGame.board.configuration.pieces[ nextFen ];
+
+                    if( nextPiece && matrixIndex.rowIndex !== 6 ) {
+                        possibleMoves.push( getFenFromMatrixIndex( matrixIndex.rowIndex + 2, matrixIndex.colIndex ) );
+                    }
+                } else if( currentPiece === 'p' ) {
+                    const nextFen = getFenFromMatrixIndex( matrixIndex.rowIndex - 1, matrixIndex.colIndex );
+                    const nextPiece = newGame.board.configuration.pieces[ nextFen ];
+
+                    if( nextPiece && matrixIndex.rowIndex !== 1 ) {
+                        possibleMoves.push( getFenFromMatrixIndex( matrixIndex.rowIndex - 2, matrixIndex.colIndex ) );
+                    }
+                }
+
+                if( currentPiece === 'Q' ) {
+                    let targetFen;
+                    for( let i = matrixIndex.rowIndex + 1; i < 8; i++  ) {
+                        const temp = getFenFromMatrixIndex( i, matrixIndex.colIndex );
+                        const temp_piece = newGame.board.configuration.pieces[ temp ];
+                        if( temp_piece ) {
+                            targetFen = temp;
+                            break;
+                        }
+                    }
+
+                    const targetPiece = newGame.board.configuration.pieces[ targetFen ];
+
+                    newGame.removePiece( targetFen );
+                    possibleMoves = newGame.moves( fen );
+                    newGame.setPiece( targetFen, targetPiece );
+
+                    const targetIndex = possibleMoves.findIndex((item) => item === targetFen);
+                    possibleMoves.splice( targetIndex, 1 );
+                }
+                else if( currentPiece === 'q' ) {
+                    let targetFen;
+                    for( let i = matrixIndex.rowIndex - 1; i >= 0; i--  ) {
+                        const temp = getFenFromMatrixIndex( i, matrixIndex.colIndex );
+                        const temp_piece = newGame.board.configuration.pieces[ temp ];
+                        if( temp_piece ) {
+                            targetFen = temp;
+                            break;
+                        }
+                    }
+
+                    const targetPiece = newGame.board.configuration.pieces[ targetFen ];
+
+                    newGame.removePiece( targetFen );
+                    possibleMoves = newGame.moves( fen );
+                    newGame.setPiece( targetFen, targetPiece );
+
+                    const targetIndex = possibleMoves.findIndex((item) => item === targetFen);
+                    possibleMoves.splice( targetIndex, 1 );
+                }
+            }
     
             if( rooms[roomIndex].matchStatus.obstacleArray ) {
                 rooms[roomIndex].matchStatus.obstacleArray.forEach((obstacle) => {
@@ -119,6 +182,8 @@ module.exports = function (server) {
             }
         }
 
+        const enPassant = game.board.configuration.enPassant;
+
         // TODO : check if pawn arrived last spuare
         const currentTurn = game.board.configuration.turn;
         if( ( currentTurn === 'white' && fromPiece === 'P' && helper.getMatrixIndexFromFen(to)['rowIndex'] === 7 ) 
@@ -134,8 +199,23 @@ module.exports = function (server) {
 
         checkIfGetItem( rooms[roomIndex], to, socket );
 
-        rooms[roomIndex].matchStatus.game.move(from, to);
-        io.sockets.to( rooms[roomIndex].id ).emit( packet.socketEvents['SC_PerformMove'], { from, to, castling } );
+        if( rooms[roomIndex].matchStatus.currentItem === packet.items['jumpyShoe'] ) {
+            // move to position
+            const game = rooms[roomIndex].matchStatus.game;
+            const chessmanFrom = game.board.getPiece( from );
+
+            Object.assign(game.board.configuration.pieces, { [to]: chessmanFrom })
+            delete game.board.configuration.pieces[from]
+
+            changeGameTurn( roomIndex );
+        } else {
+            try {
+                rooms[roomIndex].matchStatus.game.move(from, to);   
+            } catch (error) {
+                console.log(error);
+            }
+        }
+        io.sockets.to( rooms[roomIndex].id ).emit( packet.socketEvents['SC_PerformMove'], { from, to, castling, enPassant } );
 
         changeTurn(roomIndex, socket);
     }
@@ -153,7 +233,9 @@ module.exports = function (server) {
         rooms[roomIndex].matchStatus.game.move( from, to );
         rooms[roomIndex].matchStatus.game.setPiece( to, pieceType );
 
-        io.sockets.to( rooms[roomIndex].id ).emit( packet.socketEvents['SC_PerformMove'], { from, to, castling: {}, pieceType } );
+        const enPassant = rooms[roomIndex].matchStatus.game.board.configuration.enPassant;
+
+        io.sockets.to( rooms[roomIndex].id ).emit( packet.socketEvents['SC_PerformMove'], { from, to, castling: {}, pieceType, enPassant } );
 
         changeTurn(roomIndex, socket);
     }
@@ -214,7 +296,16 @@ module.exports = function (server) {
                         rooms[roomIndex].matchStatus.items[ prevPlayer ].splice(idx, 1);
                     }
                 })
+
+                if( rooms[roomIndex].matchStatus.currentItem === packet.items['jumpyShoe'] ) {
+                    const index = rooms[roomIndex].matchStatus.items[ prevPlayer ].findIndex((item) => item === packet.items['jumpyShoe']);
+                    rooms[roomIndex].matchStatus.items[ prevPlayer ].splice(index, 1);
+                }
             }
+        }
+
+        if( rooms[roomIndex].matchStatus.currentItem ) {
+            rooms[roomIndex].matchStatus.currentItem = null;
         }
 
         if( rooms[roomIndex].matchStatus.obstacleArray ) {
@@ -352,9 +443,9 @@ module.exports = function (server) {
 
         io.sockets.to( room.id ).emit( packet.socketEvents['SC_ActivateItem'], {obstacleArray: room.matchStatus.obstacleArray, userItems: room.matchStatus.items} );
 
-        changeGameTurn(roomIndex);
+        // changeGameTurn(roomIndex);
 
-        changeTurn(roomIndex, socket);
+        // changeTurn(roomIndex, socket);
     }
 
     const handleReadyMatch = ( socket ) => {
@@ -393,6 +484,13 @@ module.exports = function (server) {
         }
     }
 
+    const handleCurrentItem = ( params, socket ) => {
+        const { currentItem } = params;
+        const roomIndex = getRoomIndexFromId( socket.roomId );
+
+        rooms[roomIndex].matchStatus.currentItem = currentItem;
+    }
+
     const handleDisconnect = (socket) => {
         if( socket.roomId ) {
             const roomIndex = getRoomIndexFromId( socket.roomId );
@@ -429,6 +527,7 @@ module.exports = function (server) {
         socket.on(packet.socketEvents['CS_MatchPlayLogin'], (params) => handleMatchPlayLogin( params, socket ));
         socket.on(packet.socketEvents['CS_ActivateItem'], (params) => handleActivateItem( params, socket ));
         socket.on(packet.socketEvents['CS_Ready'], () => handleReadyMatch( socket ));
+        socket.on(packet.socketEvents['CS_CurrentItem'], (params) => handleCurrentItem(params, socket));
         socket.on('disconnect', () => handleDisconnect(socket));
     });
 
@@ -492,11 +591,18 @@ module.exports = function (server) {
             totalCount += moves[i].length;
         }
 
-        return totalCount === 0 || game.board.configuration.isFinished;
+        const king = game.board.configuration.turn === 'white' ? 'K' : 'k';
+        let isKing = false;
+        for( const i in game.board.configuration.pieces ) {
+            if( game.board.configuration.pieces[i] === king )
+                isKing = true;
+        }
+
+        return totalCount === 0 || game.board.configuration.isFinished || !isKing;
     }
 
     const getRandomItems = (game) => {
-        const count = 4 + helper.getRandomVal(2);   // get val 4 ~ 5
+        const count = 3 + helper.getRandomVal(2);   // get val 4 ~ 5
 
         const itemArray = [];
 
