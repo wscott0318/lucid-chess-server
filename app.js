@@ -23,6 +23,13 @@ fs.readdirSync(__dirname + '/models').forEach(function (file) {
     if (~file.indexOf('.js')) require(__dirname + '/models/' + file);
 });
 
+// cors middleware
+app.use(function(req, res, next) {
+    res.header("Access-Control-Allow-Origin", "*");
+    res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
+    next();
+});
+
 // implement routes
 var routes = require('./routes/index');
 var account = require('./routes/account');
@@ -62,6 +69,7 @@ app.use(passport.session());
 // app.use('/account', account);
 // app.use('/play', play);
 // app.use('/api', api);
+app.use('/api', api);
 
 require('./config/errorHandlers.js')(app);
 

@@ -1,7 +1,10 @@
 const { alphaBet, roomStatus } = require('./packet');
 const { getMatrixIndexFromFen, getFenFromMatrixIndex } = require('./util');
+var mongoose = require('mongoose');
 
 module.exports = function (server) {
+    var RankModel = mongoose.model('Rank');
+
     const packet = require('./packet');
     const helper = require('./util');
 
@@ -252,6 +255,20 @@ module.exports = function (server) {
             
             if( rooms[roomIndex].matchStatus.timeInterval )
                 clearInterval(rooms[roomIndex].matchStatus.timeInterval);
+
+            // database integration
+            const roomInfo = { ...rooms[roomIndex] };
+
+            if( !roomInfo.friendMatch ) {
+                const turn = roomInfo.matchStatus.game.board.configuration.turn;
+                const winner = roomInfo.matchStatus[ turn === 'white'? 'black' : 'white' ];
+                const loser = roomInfo.matchStatus[ turn ];
+                const winnerName = roomInfo.players[0].socketId === winner ? roomInfo.players[0].username : roomInfo.players[1].username;
+                const loserName = roomInfo.players[0].socketId === loser ? roomInfo.players[0].username : roomInfo.players[1].username;
+                const roomName = roomInfo.roomName;
+    
+                addRankRecord( winnerName, loserName, roomName );
+            }
         }
 
         let lastMoveHistory = null;
@@ -508,6 +525,23 @@ module.exports = function (server) {
                     io.sockets.to(socket.roomId).emit( packet.socketEvents['SC_PlayerLogOut'], { username: socket.username } );
                     if( rooms[roomIndex] && rooms[roomIndex].matchStatus && rooms[roomIndex].matchStatus.timeInterval )
                         clearInterval(rooms[roomIndex].matchStatus.timeInterval);
+
+                            
+                    // database integration
+                    if( rooms[roomIndex] && rooms[roomIndex].status === packet.roomStatus['inProgress'] ) {
+                        const roomInfo = { ...rooms[roomIndex] };
+
+                        if( !roomInfo.friendMatch ) {
+                            const winner = roomInfo.matchStatus.white === socket.id ? roomInfo.matchStatus.black : roomInfo.matchStatus.white;
+                            const loser = socket.id;
+                            const winnerName = roomInfo.players[0].socketId === winner ? roomInfo.players[0].username : roomInfo.players[1].username;
+                            const loserName = roomInfo.players[0].socketId === loser ? roomInfo.players[0].username : roomInfo.players[1].username;
+                            const roomName = roomInfo.roomName;
+
+                            addRankRecord( winnerName, loserName, roomName );
+                        }
+                    }
+
                     rooms.splice(roomIndex, 1);
                 }
             }
@@ -727,5 +761,51 @@ module.exports = function (server) {
 
     const changeGameTurn = ( roomIndex ) => {
         rooms[roomIndex].matchStatus.game.board.configuration.turn = rooms[roomIndex].matchStatus.game.board.configuration.turn === 'white' ? 'black' : 'white';
+    }
+
+    const getRoomPrice = ( roomName ) => {
+        if( roomName === 'Classic Room' ) {
+            return 0;
+        } else if( roomName === 'Silver Room' ) {
+            return 50;
+        } else if( roomName === 'Gold Room' ) {
+            return 100;
+        } else if( roomName === 'Platinum Room' ) {
+            return 200;
+        } else if( roomName === 'Diamond Room' ) {
+            return 500;
+        }
+    }
+
+    const addRankRecord = async ( winnerName, loserName, roomName ) => {
+        const roomPrice = getRoomPrice( roomName );
+
+        let old = await RankModel.findOne({ username: winnerName });
+        if( !old ) {
+            await new RankModel({
+                username: winnerName,
+                won: 1,
+                lost: 0,
+                earn: roomPrice * 2 * 98 / 100,
+            }).save();
+        } else {
+            old.won = old.won + 1;
+            old.earn = old.earn + roomPrice * 2 * 98 / 100;
+            old.save();
+        }
+
+        old = await RankModel.findOne({ username: loserName });
+        if( !old ) {
+            await new RankModel({
+                username: loserName,
+                won: 0,
+                lost: 1,
+                earn: -roomPrice,    //
+            }).save();
+        } else {
+            old.lost = old.lost + 1;
+            old.earn = old.earn - roomPrice;
+            old.save();
+        }
     }
 };

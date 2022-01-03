@@ -32,6 +32,13 @@ router.get('/user/:name', function(req, res) {
     });
 });
 
+router.post('/rankAll', async (req, res) => {
+    var RankModel = mongoose.model('Rank');
+    const rankData = await RankModel.find().exec();
+
+    return res.status(200).send({ rankData });
+});
+
 /* api status, for monitor */
 router.get('/', function(req, res) {
     res.status(200).end();
