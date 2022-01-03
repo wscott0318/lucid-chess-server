@@ -1,4 +1,4 @@
-const { alphaBet, roomStatus } = require('./packet');
+const { roomStatus } = require('./packet');
 const { getMatrixIndexFromFen, getFenFromMatrixIndex } = require('./util');
 var mongoose = require('mongoose');
 
@@ -14,11 +14,6 @@ module.exports = function (server) {
     console.log('Socket.io server running:');
 
     const rooms = [];
-    const users = [];
-
-    // setInterval(() => {
-    //     console.log(rooms);
-    // }, 1000);
 
     const handleCreateRoom = (params, socket) => {
         const roomId = createNewRoom( params.friendMatch, socket, params.username, params.roomName );
