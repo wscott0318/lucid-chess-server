@@ -203,12 +203,16 @@ module.exports = function (server) {
         if( ( currentTurn === 'white' && fromPiece === 'P' && helper.getMatrixIndexFromFen(to)['rowIndex'] === 7 ) 
             || ( currentTurn === 'black' && fromPiece === 'p' && helper.getMatrixIndexFromFen(to)['rowIndex'] === 0 )
         ) {
-            io.sockets.to( rooms[roomIndex].id ).emit( packet.socketEvents['SC_PawnTransform'], { from, to } );
-  
-            if( rooms[roomIndex].matchStatus.timeInterval )
-                clearInterval(rooms[roomIndex].matchStatus.timeInterval);
+            const trapIndex = rooms[roomIndex].matchStatus.randomItems.findIndex((item) => item.position === to && item.type === packet.items['springPad']);
 
-            return;
+            if( trapIndex === -1 ) {
+                io.sockets.to( rooms[roomIndex].id ).emit( packet.socketEvents['SC_PawnTransform'], { from, to } );
+  
+                if( rooms[roomIndex].matchStatus.timeInterval )
+                    clearInterval(rooms[roomIndex].matchStatus.timeInterval);
+    
+                return;
+            }
         }
 
         checkIfGetItem( rooms[roomIndex], to, socket, fromPiece );
@@ -263,7 +267,23 @@ module.exports = function (server) {
 
         checkIfGetItem( rooms[roomIndex], to, socket, pieceType );
 
-        rooms[roomIndex].matchStatus.game.move( from, to );
+        if( rooms[roomIndex].matchStatus.currentItem === packet.items['jumpyShoe'] ) {
+            // move to position
+            const game = rooms[roomIndex].matchStatus.game;
+            const chessmanFrom = game.board.getPiece( from );
+
+            Object.assign(game.board.configuration.pieces, { [to]: chessmanFrom })
+            delete game.board.configuration.pieces[from]
+
+            changeGameTurn( roomIndex );
+        } else {
+            try {
+                rooms[roomIndex].matchStatus.game.move(from, to);   
+            } catch (error) {
+                console.log(error);
+            }
+        }
+
         rooms[roomIndex].matchStatus.game.setPiece( to, pieceType );
 
         const enPassant = rooms[roomIndex].matchStatus.game.board.configuration.enPassant;
@@ -679,8 +699,8 @@ module.exports = function (server) {
                 
                 const idx = itemArray.findIndex((item) => item.position === fen);
 
-                // const type = packet.items [ Object.keys( packet.items )[ helper.getRandomVal(5) ] ];
-                const type = packet.items ['jumpyShoe'];
+                const type = packet.items [ Object.keys( packet.items )[ helper.getRandomVal(5) ] ];
+                // const type = packet.items ['jumpyShoe'];
 
                 if( type === packet.items['springPad'] ) {
                     let kingmoves = [];
