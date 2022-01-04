@@ -490,15 +490,24 @@ module.exports = function (server) {
             room.matchStatus.obstacleArray = [];
 
         effectArray.forEach((item) => {
-            const piece = room.matchStatus.game.board.configuration.pieces[ item ];
-
-            if( !piece ){
+            if( itemType === packet.items['petrify'] ) {
                 room.matchStatus.obstacleArray.push({
                     position: item,
                     type: itemType,
                     caster: socket.id,
                     life: 2,
                 })
+            } else {
+                const piece = room.matchStatus.game.board.configuration.pieces[ item ];
+
+                if( !piece ){
+                    room.matchStatus.obstacleArray.push({
+                        position: item,
+                        type: itemType,
+                        caster: socket.id,
+                        life: 2,
+                    })
+                }
             }
         })
 
@@ -722,8 +731,8 @@ module.exports = function (server) {
                 
                 const idx = itemArray.findIndex((item) => item.position === fen);
 
-                const type = packet.items [ Object.keys( packet.items )[ helper.getRandomVal(5) ] ];
-                // const type = packet.items ['jumpyShoe'];
+                // const type = packet.items [ Object.keys( packet.items )[ helper.getRandomVal(5) ] ];
+                const type = packet.items ['petrify'];
 
                 if( type === packet.items['springPad'] ) {
                     let kingmoves = [];
