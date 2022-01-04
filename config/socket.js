@@ -110,19 +110,21 @@ module.exports = function (server) {
                         }
                     }
 
-                    const targetPiece = newGame.board.configuration.pieces[ targetFen ];
+                    if( targetFen ) {
+                        const targetPiece = newGame.board.configuration.pieces[ targetFen ];
 
-                    newGame.removePiece( targetFen );
-                    possibleMoves = newGame.moves( fen );
-                    newGame.setPiece( targetFen, targetPiece );
+                        newGame.removePiece( targetFen );
+                        possibleMoves = newGame.moves( fen );
+                        newGame.setPiece( targetFen, targetPiece );
 
-                    const targetIndex = possibleMoves.findIndex((item) => item === targetFen);
-                    if( targetIndex !== -1 )
-                        possibleMoves.splice( targetIndex, 1 );
+                        const targetIndex = possibleMoves.findIndex((item) => item === targetFen);
+                        if( targetIndex !== -1 )
+                            possibleMoves.splice( targetIndex, 1 );
 
-                    const kingIndex = possibleMoves.findIndex((moveFen) => newGame.board.configuration.pieces[ moveFen ] === 'K' || newGame.board.configuration.pieces[ moveFen ] === 'k' )
-                    if( kingIndex !== -1 ) {
-                        possibleMoves.splice( kingIndex, 1 );
+                        const kingIndex = possibleMoves.findIndex((moveFen) => newGame.board.configuration.pieces[ moveFen ] === 'K' || newGame.board.configuration.pieces[ moveFen ] === 'k' )
+                        if( kingIndex !== -1 ) {
+                            possibleMoves.splice( kingIndex, 1 );
+                        }
                     }
                 }
                 else if( currentPiece === 'q' ) {
@@ -136,19 +138,21 @@ module.exports = function (server) {
                         }
                     }
 
-                    const targetPiece = newGame.board.configuration.pieces[ targetFen ];
+                    if( targetFen ) {
+                        const targetPiece = newGame.board.configuration.pieces[ targetFen ];
 
-                    newGame.removePiece( targetFen );
-                    possibleMoves = newGame.moves( fen );
-                    newGame.setPiece( targetFen, targetPiece );
+                        newGame.removePiece( targetFen );
+                        possibleMoves = newGame.moves( fen );
+                        newGame.setPiece( targetFen, targetPiece );
 
-                    const targetIndex = possibleMoves.findIndex((item) => item === targetFen);
-                    if( targetIndex !== -1 )
-                        possibleMoves.splice( targetIndex, 1 );
+                        const targetIndex = possibleMoves.findIndex((item) => item === targetFen);
+                        if( targetIndex !== -1 )
+                            possibleMoves.splice( targetIndex, 1 );
 
-                    const kingIndex = possibleMoves.findIndex((moveFen) => newGame.board.configuration.pieces[ moveFen ] === 'K' || newGame.board.configuration.pieces[ moveFen ] === 'k' )
-                    if( kingIndex !== -1 ) {
-                        possibleMoves.splice( kingIndex, 1 );
+                        const kingIndex = possibleMoves.findIndex((moveFen) => newGame.board.configuration.pieces[ moveFen ] === 'K' || newGame.board.configuration.pieces[ moveFen ] === 'k' )
+                        if( kingIndex !== -1 ) {
+                            possibleMoves.splice( kingIndex, 1 );
+                        }
                     }
                 }
             }
@@ -367,7 +371,7 @@ module.exports = function (server) {
                 })
 
                 if( rooms[roomIndex].matchStatus.currentItem === packet.items['jumpyShoe'] ) {
-                    const index = rooms[roomIndex].matchStatus.items[ prevPlayer ].findIndex((item) => item === packet.items['jumpyShoe']);
+                    const index = rooms[roomIndex].matchStatus.items[ prevPlayer ].findIndex((item) => item.type === packet.items['jumpyShoe']);
                     if( index !== -1 )
                         rooms[roomIndex].matchStatus.items[ prevPlayer ].splice(index, 1);
                 }
