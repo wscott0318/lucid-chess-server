@@ -117,7 +117,8 @@ module.exports = function (server) {
                     newGame.setPiece( targetFen, targetPiece );
 
                     const targetIndex = possibleMoves.findIndex((item) => item === targetFen);
-                    possibleMoves.splice( targetIndex, 1 );
+                    if( targetIndex !== -1 )
+                        possibleMoves.splice( targetIndex, 1 );
 
                     const kingIndex = possibleMoves.findIndex((moveFen) => newGame.board.configuration.pieces[ moveFen ] === 'K' || newGame.board.configuration.pieces[ moveFen ] === 'k' )
                     if( kingIndex !== -1 ) {
@@ -142,7 +143,8 @@ module.exports = function (server) {
                     newGame.setPiece( targetFen, targetPiece );
 
                     const targetIndex = possibleMoves.findIndex((item) => item === targetFen);
-                    possibleMoves.splice( targetIndex, 1 );
+                    if( targetIndex !== -1 )
+                        possibleMoves.splice( targetIndex, 1 );
 
                     const kingIndex = possibleMoves.findIndex((moveFen) => newGame.board.configuration.pieces[ moveFen ] === 'K' || newGame.board.configuration.pieces[ moveFen ] === 'k' )
                     if( kingIndex !== -1 ) {
@@ -366,7 +368,8 @@ module.exports = function (server) {
 
                 if( rooms[roomIndex].matchStatus.currentItem === packet.items['jumpyShoe'] ) {
                     const index = rooms[roomIndex].matchStatus.items[ prevPlayer ].findIndex((item) => item === packet.items['jumpyShoe']);
-                    rooms[roomIndex].matchStatus.items[ prevPlayer ].splice(index, 1);
+                    if( index !== -1 )
+                        rooms[roomIndex].matchStatus.items[ prevPlayer ].splice(index, 1);
                 }
             }
         }
@@ -512,7 +515,8 @@ module.exports = function (server) {
         })
 
         const index = room.matchStatus.items[ socket.id ].findIndex((item) => item.type === itemType);
-        room.matchStatus.items[ socket.id ].splice(index, 1);
+        if( index !== -1 )
+            room.matchStatus.items[ socket.id ].splice(index, 1);
 
         io.sockets.to( room.id ).emit( packet.socketEvents['SC_ActivateItem'], {obstacleArray: room.matchStatus.obstacleArray, userItems: room.matchStatus.items} );
 
@@ -731,8 +735,8 @@ module.exports = function (server) {
                 
                 const idx = itemArray.findIndex((item) => item.position === fen);
 
-                // const type = packet.items [ Object.keys( packet.items )[ helper.getRandomVal(5) ] ];
-                const type = packet.items ['petrify'];
+                const type = packet.items [ Object.keys( packet.items )[ helper.getRandomVal(5) ] ];
+                // const type = packet.items ['thunderstorm'];
 
                 if( type === packet.items['springPad'] ) {
                     let kingmoves = [];
