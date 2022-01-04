@@ -313,8 +313,8 @@ module.exports = function (server) {
                 const turn = roomInfo.matchStatus.game.board.configuration.turn;
                 const winner = roomInfo.matchStatus[ turn === 'white'? 'black' : 'white' ];
                 const loser = roomInfo.matchStatus[ turn ];
-                const winnerName = roomInfo.players[0].socketId === winner ? roomInfo.players[0].username : roomInfo.players[1].username;
-                const loserName = roomInfo.players[0].socketId === loser ? roomInfo.players[0].username : roomInfo.players[1].username;
+                const winnerName = roomInfo.players[0].socketId === winner ? roomInfo.players[0].walletAddress : roomInfo.players[1].walletAddress;
+                const loserName = roomInfo.players[0].socketId === loser ? roomInfo.players[0].walletAddress : roomInfo.players[1].walletAddress;
                 const roomName = roomInfo.roomName;
     
                 addRankRecord( winnerName, loserName, roomName );
@@ -382,7 +382,7 @@ module.exports = function (server) {
 
         const data = { 
             moves, 
-            game: rooms[roomIndex].matchStatus.game, 
+            // game: rooms[roomIndex].matchStatus.game, 
             currentTurn, 
             currentPlayer, 
             isFinished, 
@@ -512,12 +512,15 @@ module.exports = function (server) {
         // changeTurn(roomIndex, socket);
     }
 
-    const handleReadyMatch = ( socket ) => {
+    const handleReadyMatch = ( params, socket ) => {
+        const { walletAddress } = params;
+
         const roomIndex = getRoomIndexFromId( socket.roomId );
         const room = rooms[roomIndex];
 
         const playerIndex = room.players.findIndex((player) => player.socketId === socket.id);
         room.players[ playerIndex ].ready = true;
+        room.players[ playerIndex ].walletAddress = walletAddress;
 
         if( room.players.length >= 2 && room.players[0].ready && room.players[1].ready ) {
             // inital room process;
@@ -555,6 +558,24 @@ module.exports = function (server) {
         rooms[roomIndex].matchStatus.currentItem = currentItem;
     }
 
+    const handleSendDrawRequest = ( params, socket ) => {
+        socket.broadcast.to( socket.roomId ).emit( packet.socketEvents['SC_SendDrawRequest'] );
+    }
+
+    const handleReplyDrawRequest = ( params, socket ) => {
+        const { isAgree } = params;
+        const roomIndex = getRoomIndexFromId( socket.roomId );
+
+        if( rooms[roomIndex] && isAgree ) {
+            rooms[roomIndex].status = packet.roomStatus['finished'];
+            
+            if( rooms[roomIndex].matchStatus && rooms[roomIndex].matchStatus.timeInterval )
+                clearInterval( rooms[roomIndex].matchStatus.timeInterval );
+
+            io.sockets.to( socket.roomId ).emit( packet.socketEvents['SC_DrawMatch'] );
+        }
+    }
+
     const handleDisconnect = (socket) => {
         if( socket.roomId ) {
             const roomIndex = getRoomIndexFromId( socket.roomId );
@@ -581,8 +602,8 @@ module.exports = function (server) {
                         if( !roomInfo.friendMatch ) {
                             const winner = roomInfo.matchStatus.white === socket.id ? roomInfo.matchStatus.black : roomInfo.matchStatus.white;
                             const loser = socket.id;
-                            const winnerName = roomInfo.players[0].socketId === winner ? roomInfo.players[0].username : roomInfo.players[1].username;
-                            const loserName = roomInfo.players[0].socketId === loser ? roomInfo.players[0].username : roomInfo.players[1].username;
+                            const winnerName = roomInfo.players[0].socketId === winner ? roomInfo.players[0].walletAddress : roomInfo.players[1].walletAddress;
+                            const loserName = roomInfo.players[0].socketId === loser ? roomInfo.players[0].walletAddress : roomInfo.players[1].walletAddress;
                             const roomName = roomInfo.roomName;
 
                             addRankRecord( winnerName, loserName, roomName );
@@ -607,8 +628,10 @@ module.exports = function (server) {
         socket.on(packet.socketEvents['CS_UnSelectPiece'], (params) => handleUnSelectPiece( params, socket ));
         socket.on(packet.socketEvents['CS_MatchPlayLogin'], (params) => handleMatchPlayLogin( params, socket ));
         socket.on(packet.socketEvents['CS_ActivateItem'], (params) => handleActivateItem( params, socket ));
-        socket.on(packet.socketEvents['CS_Ready'], () => handleReadyMatch( socket ));
+        socket.on(packet.socketEvents['CS_Ready'], ( params ) => handleReadyMatch( params, socket ));
         socket.on(packet.socketEvents['CS_CurrentItem'], (params) => handleCurrentItem(params, socket));
+        socket.on(packet.socketEvents['CS_SendDrawRequest'], (params) => handleSendDrawRequest(params, socket));
+        socket.on(packet.socketEvents['CS_ReplyDrawRequest'], (params) => handleReplyDrawRequest(params, socket));
         socket.on('disconnect', () => handleDisconnect(socket));
     });
 

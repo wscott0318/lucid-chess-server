@@ -10,6 +10,8 @@ module.exports = {
         'CS_ActivateItem': 0xff0008,
         'CS_Ready': 0xff0009,
         'CS_CurrentItem': 0xff0010,
+        'CS_SendDrawRequest': 0xff0011,
+        'CS_ReplyDrawRequest': 0xff0012,
     
         'SC_RoomCreated': 0xff1001,
         'SC_GameStarted': 0xff1002,
@@ -24,6 +26,8 @@ module.exports = {
         'SC_ActivateItem': 0xff0011,
         'SC_JoinRoom': 0xff0012,
         'SC_ItemInfo': 0xff0013,
+        'SC_SendDrawRequest': 0xff0014,
+        'SC_DrawMatch': 0xff0015,
     },
     roomStatus: {
         'waiting': 0,
