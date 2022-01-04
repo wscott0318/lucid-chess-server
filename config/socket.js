@@ -533,7 +533,11 @@ module.exports = function (server) {
         const { walletAddress } = params;
 
         const roomIndex = getRoomIndexFromId( socket.roomId );
+
         const room = rooms[roomIndex];
+
+        if( !room )
+            return;
 
         const playerIndex = room.players.findIndex((player) => player.socketId === socket.id);
         room.players[ playerIndex ].ready = true;
