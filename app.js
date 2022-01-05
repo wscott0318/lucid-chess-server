@@ -82,10 +82,9 @@ if (process.env.APP_ENV == 'development') {
     });
 } else {
     var options = {
-        key: fs.readFileSync(process.env.KEY),
-        cert: fs.readFileSync(process.env.CERT)
-      };
-    
+        key: fs.readFileSync('./certs/file.pem'),
+        cert: fs.readFileSync('./certs/file.crt')
+    };
     server = require('https').createServer(options, app).listen(8050, function() {
         console.log("server is listening on the port 8050")
     });
