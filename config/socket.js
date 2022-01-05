@@ -389,7 +389,7 @@ module.exports = function (server) {
 
         const data = { 
             moves, 
-            // game: rooms[roomIndex].matchStatus.game, 
+            game: rooms[roomIndex].matchStatus.game, 
             currentTurn, 
             currentPlayer, 
             isFinished, 
@@ -414,7 +414,7 @@ module.exports = function (server) {
 
         io.sockets.to( rooms[roomIndex].id ).emit( packet.socketEvents['SC_RemainingTime'], { remainingTime: rooms[roomIndex].matchStatus.remainingTime } );
         rooms[roomIndex].matchStatus.timeInterval = setInterval(() => {
-            if( !rooms[roomIndex] ) {
+            if( !rooms[roomIndex] || !rooms[roomIndex].matchStatus ) {
                 return;
             }
 
