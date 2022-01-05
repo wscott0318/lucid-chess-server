@@ -73,7 +73,16 @@ app.use('/api', api);
 
 require('./config/errorHandlers.js')(app);
 
-var server = require('http').createServer(app).listen(8050, function() {
+// var server = require('http').createServer(app).listen(8050, function() {
+//     console.log("server is listening on port 8050")
+// });
+
+let sslOptions = {
+    key: fs.readFileSync('/etc/letsencrypt/live/chess.lucidlands.io/privkey.pem'),
+    cert: fs.readFileSync('/etc/letsencrypt/live/chess.lucidlands.io/fullchain.pem')
+};
+
+var server = require('https').createServer(sslOptions, app).listen(8050, function() {
     console.log("server is listening on port 8050")
 });
 
