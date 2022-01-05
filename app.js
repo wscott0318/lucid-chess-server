@@ -84,7 +84,6 @@ let sslOptions = {
 
 var server = require('https').createServer(sslOptions, app).listen(8050, function() {
     console.log("server is listening on the port 8050")
-});
 
 require('./config/socket.js')(server);
 
