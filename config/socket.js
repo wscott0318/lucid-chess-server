@@ -330,6 +330,7 @@ module.exports = function (server) {
         let lastMoveHistory = null;
         if( rooms[roomIndex].matchStatus.game.board.history.length > 0 ) {
             lastMoveHistory = rooms[roomIndex].matchStatus.game.board.history.slice(-1)[0];
+            lastMoveHistory = { from: lastMoveHistory.from, to: lastMoveHistory.to };
         }
 
         const kingFen = {};
@@ -389,7 +390,8 @@ module.exports = function (server) {
 
         const data = { 
             moves, 
-            game: rooms[roomIndex].matchStatus.game, 
+            pieces: rooms[roomIndex].matchStatus.game.board.configuration.pieces,
+            // game: rooms[roomIndex].matchStatus.game, 
             currentTurn, 
             currentPlayer, 
             isFinished, 
