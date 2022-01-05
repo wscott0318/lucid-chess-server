@@ -819,7 +819,20 @@ module.exports = function (server) {
                     Object.assign(game.board.configuration.pieces, { [toPosition]: chessmanFrom });
                     delete game.board.configuration.pieces[ fromPosition ];
             
-                    io.sockets.to( room.id ).emit( packet.socketEvents['SC_PerformMove'], { from: fromPosition, to: toPosition, castling: {} } );
+                    const kingFen = {};
+                    for( const i in room.matchStatus.game.board.configuration.pieces ) {
+                        const n = room.matchStatus.game.board.getPiece(i);
+                        if( room.matchStatus.game.board.isKing(n) ) {
+                            kingFen[n] = i;
+                        }
+                    }
+            
+                    const dangerKing = {
+                        'K': room.matchStatus.game.board.isPieceUnderAttack( kingFen['K'] ),
+                        'k': room.matchStatus.game.board.isPieceUnderAttack( kingFen['k'] ),
+                    };
+
+                    io.sockets.to( room.id ).emit( packet.socketEvents['SC_PerformMove'], { from: fromPosition, to: toPosition, dangerKing, castling: {} } );
                 }, 700);
             }
 
