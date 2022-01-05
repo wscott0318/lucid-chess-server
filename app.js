@@ -9,6 +9,7 @@ var bodyParser = require('body-parser');
 var mongoose = require('mongoose');
 var passport = require('passport');
 var flash = require('connect-flash');
+require('dotenv').config()
 
 var env = process.env.NODE_ENV || 'default';
 var config = require('config');
@@ -73,18 +74,22 @@ app.use('/api', api);
 
 require('./config/errorHandlers.js')(app);
 
-// var server = require('http').createServer(app).listen(8050, function() {
-//     console.log("server is listening on port 8050")
-// });
+var server;
 
-let sslOptions = {
-    key: fs.readFileSync('./certs/privkey.pem'),
-    cert: fs.readFileSync('./certs/fullchain.pem')
-};
-
-var server = require('https').createServer(sslOptions, app).listen(8050, function() {
-    console.log("server is listening on the port 8050")
-});
+if (process.env.APP_ENV == 'development') {
+    server = require('http').createServer(app).listen(8050, function() {
+        console.log("server is listening on port 8050")
+    });
+} else {
+    var options = {
+        key: fs.readFileSync(process.env.KEY),
+        cert: fs.readFileSync(process.env.CERT)
+      };
+    
+    server = require('https').createServer(options, app).listen(8050, function() {
+        console.log("server is listening on the port 8050")
+    });
+}
 
 require('./config/socket.js')(server);
 
