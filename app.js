@@ -73,18 +73,18 @@ app.use('/api', api);
 
 require('./config/errorHandlers.js')(app);
 
-var server = require('http').createServer(app).listen(8050, function() {
-    console.log("server is listening on port 8050")
-});
-
-// let sslOptions = {
-//     key: fs.readFileSync('./privkey.pem'),
-//     cert: fs.readFileSync('./fullchain.pem')
-// };
-
-// var server = require('https').createServer(sslOptions, app).listen(8050, function() {
-//     console.log("server is listening on the port 8050")
+// var server = require('http').createServer(app).listen(8050, function() {
+//     console.log("server is listening on port 8050")
 // });
+
+let sslOptions = {
+    key: fs.readFileSync('./certs/privkey.pem'),
+    cert: fs.readFileSync('./certs/fullchain.pem')
+};
+
+var server = require('https').createServer(sslOptions, app).listen(8050, function() {
+    console.log("server is listening on the port 8050")
+});
 
 require('./config/socket.js')(server);
 
